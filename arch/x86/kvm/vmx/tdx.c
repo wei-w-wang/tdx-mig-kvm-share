@@ -1524,13 +1524,12 @@ int __init tdx_hardware_setup(struct kvm_x86_ops *x86_ops)
 	int r = 0;
 	int i;
 
+	if (!tdp_mmu_enabled || !enable_mmio_caching)
+		return -EOPNOTSUPP;
+
 	if (!cpu_feature_enabled(X86_FEATURE_MOVDIR64B)) {
 		pr_warn("MOVDIR64B is reqiured for TDX\n");
 		return -EOPNOTSUPP;
-	}
-	if (!enable_ept) {
-		pr_warn("Cannot enable TDX with EPT disabled\n");
-		return -EINVAL;
 	}
 
 	max_pkgs = topology_max_packages();
