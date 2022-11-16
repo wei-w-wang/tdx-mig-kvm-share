@@ -6728,6 +6728,78 @@ struct kvm_vcpu * __percpu *kvm_get_running_vcpus(void)
         return &kvm_running_vcpu;
 }
 
+static struct kvm *kvm_get_kvm_by_vmfd(uint32_t vmfd)
+{
+	struct kvm *target_kvm = NULL;
+	struct file *target_kvm_file;
+
+	target_kvm_file = fget(vmfd);
+	if (!target_kvm_file)
+		return NULL;
+
+	if (!file_is_kvm(target_kvm_file))
+		goto out_fput;
+
+	target_kvm = target_kvm_file->private_data;
+
+out_fput:
+	fput(target_kvm_file);
+	return target_kvm;
+}
+
+
+static struct kvm *kvm_get_kvm_by_pid(pid_t pid)
+{
+	struct kvm *kvm, *target_kvm = NULL;
+
+	mutex_lock(&kvm_lock);
+	list_for_each_entry(kvm, &vm_list, vm_list) {
+		if (kvm && kvm->userspace_pid == pid) {
+			target_kvm = kvm;
+			break;
+		}
+	}
+	mutex_unlock(&kvm_lock);
+
+	return target_kvm;
+}
+
+/*
+ * kvm_get_target_kvm - Retrieve the target KVM instance using @target_vm_id
+ *
+ * VMs can be instantiated in two ways:
+ * 1. Each VM is created by its own VMM process, assigning a unique Process ID
+ *    (PID) to each VM.
+ * 2. All VMs are created by a single common VMM process, sharing the same PID.
+ *
+ * The method of instantiation depends on the design of the userspace VMM.
+ *
+ * In the first scenario, it's easier to identify the target VM using its PID
+ * rather than its vmfd (returned by KVM_CREATE_VM). This is because the caller
+ * and the target VM exist in separate processes, and the vmfd is only visible
+ * within the VM's own process.
+ *
+ * In the second scenario, it's simpler to identify the target VM using its
+ * vmfd. This is due to the existence of a single VM creation process that
+ * creates all VMs and manages all vmfds.
+ *
+ * This function accommodates both scenarios, allowing callers to pass in
+ * either a PID or a vmfd via @target_vm_id.
+ *
+ * Returns: The target KVM structure if found, NULL otherwise.
+ */
+struct kvm *kvm_get_target_kvm(struct kvm_vm_id *target_vm_id)
+{
+	if (target_vm_id->type == KVM_VM_ID_TYPE_PID)
+		return kvm_get_kvm_by_pid((pid_t)(target_vm_id->pid));
+	else if (target_vm_id->type == KVM_VM_ID_TYPE_FD)
+		return kvm_get_kvm_by_vmfd(target_vm_id->vmfd);
+
+	pr_err("kvm: invalid target vm id type\n");
+	return NULL;
+}
+EXPORT_SYMBOL_GPL(kvm_get_target_kvm);
+
 #ifdef CONFIG_GUEST_PERF_EVENTS
 static unsigned int kvm_guest_state(void)
 {
