@@ -285,6 +285,8 @@ void hugetlb_unshare_all_pmds(struct vm_area_struct *vma);
 void hugetlb_zero_partial_page(struct hstate *h, struct address_space *mapping,
 			       loff_t start, loff_t end);
 
+void remove_inode_hugepages(struct inode *inode, loff_t lstart, loff_t lend);
+
 void enqueue_hugetlb_folio(struct hstate *h, struct folio *folio);
 struct folio *dequeue_hugetlb_folio_node_exact(struct hstate *h, int nid);
 
@@ -528,6 +530,8 @@ static inline void hugetlb_unshare_all_pmds(struct vm_area_struct *vma) { }
 
 static inline void hugetlb_zero_partial_page(
 	struct hstate *h, struct address_space *mapping, loff_t start, loff_t end) {}
+
+static inline void remove_inode_hugepages(struct inode *inode, loff_t lstart, loff_t lend) {}
 
 static inline int hugetlb_insert_hugepage_pte(struct mm_struct *mm, unsigned long addr,
 				pgprot_t prot, struct page *hpage)
