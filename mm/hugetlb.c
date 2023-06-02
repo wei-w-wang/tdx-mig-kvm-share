@@ -3129,12 +3129,12 @@ int isolate_or_dissolve_huge_page(struct page *page, struct list_head *list)
 	return ret;
 }
 
-struct folio *alloc_hugetlb_folio(struct vm_area_struct *vma,
-				    unsigned long addr, int avoid_reserve)
+struct folio *alloc_hugetlb_folio_from_subpool(
+	struct hugepage_subpool *spool, struct hstate *h,
+	struct vm_area_struct *vma, unsigned long addr, int avoid_reserve)
+ 
 {
-	struct hugepage_subpool *spool = subpool_vma(vma);
 	struct hugetlbfs_inode_info *info = HUGETLBFS_I(file_inode(vma->vm_file));
-	struct hstate *h = hstate_vma(vma);
 	struct folio *folio;
 	long map_chg, map_commit, nr_pages = pages_per_huge_page(h);
 	long gbl_chg;
@@ -3307,6 +3307,15 @@ static void *__init __alloc_bootmem_huge_page_inner(phys_addr_t size,
 
 	return memblock_alloc_try_nid_raw_flags(size, align, min_addr, max_addr,
 						nid, MEMBLOCK_NOMIRROR);
+}
+
+struct folio *alloc_hugetlb_folio(struct vm_area_struct *vma,
+				    unsigned long addr, int avoid_reserve)
+{
+	struct hugepage_subpool *spool = subpool_vma(vma);
+	struct hstate *h = hstate_vma(vma);
+
+	return alloc_hugetlb_folio_from_subpool(spool, h, vma, addr, avoid_reserve);
 }
 
 int alloc_bootmem_huge_page(struct hstate *h, int nid)
