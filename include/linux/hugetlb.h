@@ -646,6 +646,20 @@ static inline struct hugepage_subpool *subpool_inode(struct inode *inode)
 	return HUGETLBFS_SB(inode->i_sb)->spool;
 }
 
+static inline struct resv_map *inode_resv_map(struct inode *inode)
+{
+	/*
+	 * At inode evict time, i_mapping may not point to the original
+	 * address space within the inode.  This original address space
+	 * contains the pointer to the resv_map.  So, always use the
+	 * address space embedded within the inode.
+	 * The VERY common case is inode->mapping == &inode->i_data but,
+	 * this may not be true for device special inodes.
+	 */
+	return (struct resv_map *)(&inode->i_data)->private_data;
+}
+
+
 #else /* !CONFIG_HUGETLBFS */
 
 #define is_file_hugepages(file)			false
@@ -662,6 +676,11 @@ static inline struct hstate *hstate_inode(struct inode *i)
 }
 
 static inline struct hugepage_subpool *subpool_inode(struct inode *inode)
+{
+	return NULL;
+}
+
+static inline struct resv_map *inode_resv_map(struct inode *inode)
 {
 	return NULL;
 }
@@ -840,8 +859,6 @@ int hugetlb_add_to_page_cache(struct folio *folio, struct address_space *mapping
 			pgoff_t idx);
 void restore_reserve_on_error(struct resv_map *resv, pgoff_t resv_index,
 			      bool may_share, struct folio *folio);
-void restore_reserve_on_error_vma(struct hstate *h, struct vm_area_struct *vma,
-				  unsigned long address, struct folio *folio); 
 void destroy_compound_hugetlb_folio_for_demote(struct folio *folio,
 						unsigned int order);
 bool prep_compound_gigantic_folio_for_demote(struct folio *folio,
