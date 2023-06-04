@@ -2761,89 +2761,81 @@ out:
 
 
 /*
- * vma_needs_reservation, vma_commit_reservation and vma_end_reservation
- * are used by the huge page allocation routines to manage reservations.
+ * resv_map_needs_reservation, resv_map_commit_reservation and
+ * resv_map_end_reservation are used by the huge page allocation routines to
+ * manage reservations.
  *
- * vma_needs_reservation is called to determine if the huge page at addr
- * within the vma has an associated reservation.  If a reservation is
- * needed, the value 1 is returned.  The caller is then responsible for
- * managing the global reservation and subpool usage counts.  After
- * the huge page has been allocated, vma_commit_reservation is called
- * to add the page to the reservation map.  If the page allocation fails,
- * the reservation must be ended instead of committed.  vma_end_reservation
- * is called in such cases.
+ * resv_map_needs_reservation is called to determine if the huge page at addr
+ * within the vma has an associated reservation.  If a reservation is needed,
+ * the value 1 is returned.  The caller is then responsible for managing the
+ * global reservation and subpool usage counts.  After the huge page has been
+ * allocated, resv_map_commit_reservation is called to add the page to the
+ * reservation map.  If the page allocation fails, the reservation must be ended
+ * instead of committed.  resv_map_end_reservation is called in such cases.
  *
- * In the normal case, vma_commit_reservation returns the same value
- * as the preceding vma_needs_reservation call.  The only time this
- * is not the case is if a reserve map was changed between calls.  It
- * is the responsibility of the caller to notice the difference and
- * take appropriate action.
+ * In the normal case, resv_map_commit_reservation returns the same value as the
+ * preceding resv_map_needs_reservation call.  The only time this is not the
+ * case is if a reserve map was changed between calls.  It is the responsibility
+ * of the caller to notice the difference and take appropriate action.
  *
- * vma_add_reservation is used in error paths where a reservation must
- * be restored when a newly allocated huge page must be freed.  It is
- * to be called after calling vma_needs_reservation to determine if a
- * reservation exists.
+ * resv_map_add_reservation is used in error paths where a reservation must be
+ * restored when a newly allocated huge page must be freed.  It is to be called
+ * after calling resv_map_needs_reservation to determine if a reservation
+ * exists.
  *
- * vma_del_reservation is used in error paths where an entry in the reserve
- * map was created during huge page allocation and must be removed.  It is to
- * be called after calling vma_needs_reservation to determine if a reservation
+ * resv_map_del_reservation is used in error paths where an entry in the reserve
+ * map was created during huge page allocation and must be removed.  It is to be
+ * called after calling resv_map_needs_reservation to determine if a reservation
  * exists.
  */
-enum vma_resv_mode {
-	VMA_NEEDS_RESV,
-	VMA_COMMIT_RESV,
-	VMA_END_RESV,
-	VMA_ADD_RESV,
-	VMA_DEL_RESV,
+enum resv_map_resv_mode {
+	RESV_MAP_NEEDS_RESV,
+	RESV_MAP_COMMIT_RESV,
+	RESV_MAP_END_RESV,
+	RESV_MAP_ADD_RESV,
+	RESV_MAP_DEL_RESV,
 };
-static long __vma_reservation_common(struct hstate *h,
-				struct vm_area_struct *vma, unsigned long addr,
-				enum vma_resv_mode mode)
+static long __resv_map_reservation_common(struct resv_map *resv, pgoff_t resv_index,
+					  bool may_be_shared_mapping,
+					  enum resv_map_resv_mode mode)
 {
-	struct resv_map *resv;
-	pgoff_t idx;
 	long ret;
 	long dummy_out_regions_needed;
 
-	resv = vma_resv_map(vma);
-	if (!resv)
-		return 1;
-
-	idx = vma_hugecache_offset(h, vma, addr);
 	switch (mode) {
-	case VMA_NEEDS_RESV:
-		ret = region_chg(resv, idx, idx + 1, &dummy_out_regions_needed);
+	case RESV_MAP_NEEDS_RESV:
+		ret = region_chg(resv, resv_index, resv_index + 1, &dummy_out_regions_needed);
 		/* We assume that vma_reservation_* routines always operate on
 		 * 1 page, and that adding to resv map a 1 page entry can only
 		 * ever require 1 region.
 		 */
 		VM_BUG_ON(dummy_out_regions_needed != 1);
 		break;
-	case VMA_COMMIT_RESV:
-		ret = region_add(resv, idx, idx + 1, 1, NULL, NULL);
+	case RESV_MAP_COMMIT_RESV:
+		ret = region_add(resv, resv_index, resv_index + 1, 1, NULL, NULL);
 		/* region_add calls of range 1 should never fail. */
 		VM_BUG_ON(ret < 0);
 		break;
-	case VMA_END_RESV:
-		region_abort(resv, idx, idx + 1, 1);
+	case RESV_MAP_END_RESV:
+		region_abort(resv, resv_index, resv_index + 1, 1);
 		ret = 0;
 		break;
-	case VMA_ADD_RESV:
-		if (vma->vm_flags & VM_MAYSHARE) {
-			ret = region_add(resv, idx, idx + 1, 1, NULL, NULL);
+	case RESV_MAP_ADD_RESV:
+		if (may_be_shared_mapping) {
+			ret = region_add(resv, resv_index, resv_index + 1, 1, NULL, NULL);
 			/* region_add calls of range 1 should never fail. */
 			VM_BUG_ON(ret < 0);
 		} else {
-			region_abort(resv, idx, idx + 1, 1);
-			ret = region_del(resv, idx, idx + 1);
+			region_abort(resv, resv_index, resv_index + 1, 1);
+			ret = region_del(resv, resv_index, resv_index + 1);
 		}
 		break;
-	case VMA_DEL_RESV:
-		if (vma->vm_flags & VM_MAYSHARE) {
-			region_abort(resv, idx, idx + 1, 1);
-			ret = region_del(resv, idx, idx + 1);
+	case RESV_MAP_DEL_RESV:
+		if (may_be_shared_mapping) {
+			region_abort(resv, resv_index, resv_index + 1, 1);
+			ret = region_del(resv, resv_index, resv_index + 1);
 		} else {
-			ret = region_add(resv, idx, idx + 1, 1, NULL, NULL);
+			ret = region_add(resv, resv_index, resv_index + 1, 1, NULL, NULL);
 			/* region_add calls of range 1 should never fail. */
 			VM_BUG_ON(ret < 0);
 		}
@@ -2852,7 +2844,7 @@ static long __vma_reservation_common(struct hstate *h,
 		BUG();
 	}
 
-	if (vma->vm_flags & VM_MAYSHARE || mode == VMA_DEL_RESV)
+	if (may_be_shared_mapping || mode == RESV_MAP_DEL_RESV)
 		return ret;
 	/*
 	 * We know private mapping must have HPAGE_RESV_OWNER set.
@@ -2876,34 +2868,39 @@ static long __vma_reservation_common(struct hstate *h,
 	return ret;
 }
 
-static long vma_needs_reservation(struct hstate *h,
-			struct vm_area_struct *vma, unsigned long addr)
+static long resv_map_needs_reservation(struct resv_map *resv, pgoff_t resv_index,
+				       bool may_be_shared_mapping)
 {
-	return __vma_reservation_common(h, vma, addr, VMA_NEEDS_RESV);
+	return __resv_map_reservation_common(
+		resv, resv_index, may_be_shared_mapping, RESV_MAP_NEEDS_RESV);
 }
 
-static long vma_commit_reservation(struct hstate *h,
-			struct vm_area_struct *vma, unsigned long addr)
+static long resv_map_commit_reservation(struct resv_map *resv, pgoff_t resv_index,
+					bool may_be_shared_mapping)
 {
-	return __vma_reservation_common(h, vma, addr, VMA_COMMIT_RESV);
+	return __resv_map_reservation_common(
+		resv, resv_index, may_be_shared_mapping, RESV_MAP_COMMIT_RESV);
 }
 
-static void vma_end_reservation(struct hstate *h,
-			struct vm_area_struct *vma, unsigned long addr)
+static void resv_map_end_reservation(struct resv_map *resv, pgoff_t resv_index,
+				     bool may_be_shared_mapping)
 {
-	(void)__vma_reservation_common(h, vma, addr, VMA_END_RESV);
+	(void)__resv_map_reservation_common(
+		resv, resv_index, may_be_shared_mapping, RESV_MAP_END_RESV);
 }
 
-static long vma_add_reservation(struct hstate *h,
-			struct vm_area_struct *vma, unsigned long addr)
+static long resv_map_add_reservation(struct resv_map *resv, pgoff_t resv_index,
+				     bool may_be_shared_mapping)
 {
-	return __vma_reservation_common(h, vma, addr, VMA_ADD_RESV);
+	return __resv_map_reservation_common(
+		resv, resv_index, may_be_shared_mapping, RESV_MAP_ADD_RESV);
 }
 
-static long vma_del_reservation(struct hstate *h,
-			struct vm_area_struct *vma, unsigned long addr)
+static long resv_map_del_reservation(struct resv_map *resv, pgoff_t resv_index,
+				     bool may_be_shared_mapping)
 {
-	return __vma_reservation_common(h, vma, addr, VMA_DEL_RESV);
+	return __resv_map_reservation_common(
+		resv, resv_index, may_be_shared_mapping, RESV_MAP_DEL_RESV);
 }
 
 /*
@@ -2929,7 +2926,12 @@ static long vma_del_reservation(struct hstate *h,
 void restore_reserve_on_error(struct hstate *h, struct vm_area_struct *vma,
 			unsigned long address, struct folio *folio)
 {
-	long rc = vma_needs_reservation(h, vma, address);
+	long rc;
+	struct resv_map *resv = vma_resv_map(vma);
+	pgoff_t resv_index = vma_hugecache_offset(h, vma, address);
+	bool may_share = vma->vm_flags & VM_MAYSHARE;
+
+	rc = resv_map_needs_reservation(resv, resv_index, may_share);
 
 	if (folio_test_hugetlb_restore_reserve(folio)) {
 		if (unlikely(rc < 0))
@@ -2946,9 +2948,9 @@ void restore_reserve_on_error(struct hstate *h, struct vm_area_struct *vma,
 			 */
 			folio_clear_hugetlb_restore_reserve(folio);
 		else if (rc)
-			(void)vma_add_reservation(h, vma, address);
+			(void)resv_map_add_reservation(resv, resv_index, may_share);
 		else
-			vma_end_reservation(h, vma, address);
+			resv_map_end_reservation(resv, resv_index, may_share);
 	} else {
 		if (!rc) {
 			/*
@@ -2959,7 +2961,7 @@ void restore_reserve_on_error(struct hstate *h, struct vm_area_struct *vma,
 			 * Remove the entry so that a subsequent allocation
 			 * does not consume a reservation.
 			 */
-			rc = vma_del_reservation(h, vma, address);
+			rc = resv_map_del_reservation(resv, resv_index, may_share);
 			if (rc < 0)
 				/*
 				 * VERY rare out of memory condition.  Since
@@ -2973,7 +2975,7 @@ void restore_reserve_on_error(struct hstate *h, struct vm_area_struct *vma,
 		} else if (rc < 0) {
 			/*
 			 * Rare out of memory condition from
-			 * vma_needs_reservation call.  Memory allocation is
+			 * resv_map_needs_reservation call.  Memory allocation is
 			 * only attempted if a new entry is needed.  Therefore,
 			 * this implies there is not an entry in the
 			 * reserve map.
@@ -2995,7 +2997,7 @@ void restore_reserve_on_error(struct hstate *h, struct vm_area_struct *vma,
 			/*
 			 * No reservation present, do nothing
 			 */
-			 vma_end_reservation(h, vma, address);
+			 resv_map_end_reservation(resv, resv_index, may_share);
 	}
 }
 
@@ -3151,13 +3153,17 @@ struct folio *alloc_hugetlb_folio_from_subpool(
 		return ERR_PTR(-ENOMEM);
 	}
 
+	struct resv_map *resv = vma_resv_map(vma);
+	pgoff_t resv_index = vma_hugecache_offset(h, vma, addr);
+	bool may_share = vma->vm_flags & VM_MAYSHARE;
+
 	idx = hstate_index(h);
 	/*
 	 * Examine the region/reserve map to determine if the process
 	 * has a reservation for the page to be allocated.  A return
 	 * code of zero indicates a reservation exists (no change).
 	 */
-	map_chg = gbl_chg = vma_needs_reservation(h, vma, addr);
+	map_chg = gbl_chg = resv_map_needs_reservation(resv, resv_index, may_share);
 	if (map_chg < 0) {
 		if (!memcg_charge_ret)
 			mem_cgroup_cancel_charge(memcg, nr_pages);
@@ -3174,9 +3180,9 @@ struct folio *alloc_hugetlb_folio_from_subpool(
 	 */
 	if (map_chg || avoid_reserve) {
 		gbl_chg = hugepage_subpool_get_pages(spool, 1, info);
-		if (gbl_chg < 0)
+		if (gbl_chg < 0) 
 			goto out_end_reservation;
-
+		
 		/*
 		 * Even though there was no reservation in the region/reserve
 		 * map, there could be reservations associated with the
@@ -3252,11 +3258,11 @@ out:
 
 	hugetlb_set_folio_subpool(folio, spool);
 
-	map_commit = vma_commit_reservation(h, vma, addr);
+	map_commit = resv_map_commit_reservation(resv, resv_index, may_share);
 	if (unlikely(map_chg > map_commit)) {
 		/*
 		 * The page was added to the reservation map between
-		 * vma_needs_reservation and vma_commit_reservation.
+		 * resv_map_needs_reservation and resv_map_commit_reservation.
 		 * This indicates a race with hugetlb_reserve_pages.
 		 * Adjust for the subpool count incremented above AND
 		 * in hugetlb_reserve_pages for the same page.  Also,
@@ -3288,7 +3294,7 @@ out_subpool_put:
 	if (map_chg || avoid_reserve)
 		hugepage_subpool_put_pages(spool, 1, info);
 out_end_reservation:
-	vma_end_reservation(h, vma, addr);
+	resv_map_end_reservation(resv, resv_index, may_share);
 	if (!memcg_charge_ret)
 		mem_cgroup_cancel_charge(memcg, nr_pages);
 	mem_cgroup_put(memcg);
@@ -6219,12 +6225,16 @@ static vm_fault_t hugetlb_no_page(struct mm_struct *mm,
 	 * the spinlock.
 	 */
 	if ((flags & FAULT_FLAG_WRITE) && !(vma->vm_flags & VM_SHARED)) {
-		if (vma_needs_reservation(h, vma, haddr) < 0) {
+		struct resv_map *resv = vma_resv_map(vma);
+		pgoff_t resv_index = vma_hugecache_offset(h, vma, address);
+		bool may_share = vma->vm_flags & VM_MAYSHARE;
+
+		if (resv_map_needs_reservation(resv, resv_index, may_share) < 0) {
 			ret = VM_FAULT_OOM;
 			goto backout_unlocked;
 		}
 		/* Just decrements count, does not deallocate */
-		vma_end_reservation(h, vma, haddr);
+		resv_map_end_reservation(resv, resv_index, may_share);
 	}
 
 	ptl = huge_pte_lock(h, mm, ptep);
@@ -6406,12 +6416,16 @@ vm_fault_t hugetlb_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	 */
 	if ((flags & (FAULT_FLAG_WRITE|FAULT_FLAG_UNSHARE)) &&
 	    !(vma->vm_flags & VM_MAYSHARE) && !huge_pte_write(entry)) {
-		if (vma_needs_reservation(h, vma, haddr) < 0) {
+		struct resv_map *resv = vma_resv_map(vma);
+		pgoff_t resv_index = vma_hugecache_offset(h, vma, address);
+		bool may_share = vma->vm_flags & VM_MAYSHARE;
+
+		if (resv_map_needs_reservation(resv, resv_index, may_share) < 0) { 
 			ret = VM_FAULT_OOM;
 			goto out_mutex;
 		}
 		/* Just decrements count, does not deallocate */
-		vma_end_reservation(h, vma, haddr);
+		resv_map_end_reservation(resv, resv_index, may_share);
 
 		pagecache_folio = filemap_lock_folio(mapping, idx);
 		if (IS_ERR(pagecache_folio))
