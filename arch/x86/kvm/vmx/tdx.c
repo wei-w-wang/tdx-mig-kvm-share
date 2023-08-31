@@ -1949,7 +1949,7 @@ static int tdx_sept_zap_private_spte(struct kvm *kvm, gfn_t gfn,
 	u64 err;
 
 	/* This can be called when destructing guest TD after freeing HKID. */
-	if (unlikely(!is_hkid_assigned(kvm_tdx)))
+	if (unlikely(!is_hkid_assigned(kvm_tdx)) || !kvm_tdx->td_initialized)
 		return 0;
 
 	err = tdh_mem_range_block(kvm_tdx->tdr_pa, gpa, tdx_level, &out);
