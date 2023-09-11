@@ -4107,6 +4107,13 @@ static inline void accept_memory(phys_addr_t start, phys_addr_t end)
 
 #endif
 
+static inline bool pfn_is_unaccepted_memory(unsigned long pfn)
+{
+	phys_addr_t paddr = pfn << PAGE_SHIFT;
+
+	return range_contains_unaccepted_memory(paddr, paddr + PAGE_SIZE);
+}
+
 /* added to mm.h to avoid every caller adding new header file */
 #include <linux/mem_reliable.h>
 
