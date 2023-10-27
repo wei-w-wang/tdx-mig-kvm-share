@@ -6084,7 +6084,7 @@ delivery must be provided via the "reg_aen" struct.
 The "pad" and "reserved" fields may be used for future extensions and should be
 set to 0s by userspace.
 
-4.138 KVM_ARM_SET_COUNTER_OFFSET
+4.140 KVM_ARM_SET_COUNTER_OFFSET
 --------------------------------
 
 :Capability: KVM_CAP_COUNTER_OFFSET
@@ -6121,6 +6121,28 @@ Note that using this ioctl results in KVM ignoring subsequent userspace
 writes to the CNTVCT_EL0 and CNTPCT_EL0 registers using the SET_ONE_REG
 interface. No error will be returned, but the resulting offset will not be
 applied.
+
+4.139 KVM_SET_USER_MEMORY_REGION2
+---------------------------------
+
+:Capability: KVM_CAP_USER_MEMORY2
+:Architectures: all
+:Type: vm ioctl
+:Parameters: struct kvm_userspace_memory_region2 (in)
+:Returns: 0 on success, -1 on error
+
+::
+
+  struct kvm_userspace_memory_region2 {
+	__u32 slot;
+	__u32 flags;
+	__u64 guest_phys_addr;
+	__u64 memory_size; /* bytes */
+	__u64 userspace_addr; /* start of the userspace allocated memory */
+	__u64 pad[16];
+  };
+
+See KVM_SET_USER_MEMORY_REGION.
 
 5. The kvm_run structure
 ========================
