@@ -1367,7 +1367,9 @@ struct kvm_arch {
 	int nr_vcpus_matched_tsc;
 
 	u32 default_tsc_khz;
-
+	u64 apic_bus_cycle_ns;
+	u64 apic_bus_frequency;
+ 
 	seqcount_raw_spinlock_t pvclock_sc;
 	bool use_master_clock;
 	u64 master_kernel_ns;
