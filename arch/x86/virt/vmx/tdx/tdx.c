@@ -127,7 +127,7 @@ static int __init trace_seamcalls(char *s)
 }
 __setup("trace_boot_seamcalls", trace_seamcalls);
 
-static u64 tdx_trace_level = DEBUGCONFIG_TRACE_CUSTOM;
+static u64 tdx_trace_level = DEBUGCONFIG_TRACE_ERROR;
 
 static int trace_level_set(const char *val, const struct kernel_param *kp)
 {
@@ -1322,14 +1322,19 @@ static int init_tdx_module(void)
 		c->edx = data >> 32;
 	}
 
+	printk("%s: tdsysinfo->attributes=%x\n", __func__, tdsysinfo->attributes);
+	tdx_trace_seamcalls(tdx_trace_level);
+#if 0
 	/* TDX seamcall trace is supported only with debug build. */
 	if (tdsysinfo->attributes & TDSYSINFO_ATTRIBUTES_DEBUG) {
+		printk("%s: trace_boot_seamcalls=%d, tdx_trace_level=%lld\n",
+			__func__, trace_boot_seamcalls, tdx_trace_level);
 		if (trace_boot_seamcalls)
 			tdx_trace_seamcalls(DEBUGCONFIG_TRACE_ALL);
 		else
 			tdx_trace_seamcalls(tdx_trace_level);
 	}
-
+#endif
 	ret = tdx_sysfs_init();
 	if (ret)
 		goto err_free_tdxmem;
