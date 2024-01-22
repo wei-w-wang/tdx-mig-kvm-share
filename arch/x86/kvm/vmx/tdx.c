@@ -143,12 +143,15 @@ struct migtd_basic_info {
 
 struct tdvmcall_service_migtd {
 #define TDVMCALL_SERVICE_MIGTD_WAIT_VERSION	0
+#define TDVMCALL_SERVICE_MIGTD_REPORT_VERSION	0
 	uint8_t version;
 #define TDVMCALL_SERVICE_MIGTD_CMD_WAIT		1
+#define TDVMCALL_SERVICE_MIGTD_CMD_REPORT	2
 	uint8_t cmd;
 #define TDVMCALL_SERVICE_MIGTD_OP_NOOP		0
 #define TDVMCALL_SERVICE_MIGTD_OP_START_MIG	1
 	uint8_t operation;
+#define TDVMCALL_SERVICE_MIGTD_STATUS_SUCC	0
 	uint8_t status;
 	uint8_t data[0];
 };
@@ -1669,6 +1672,41 @@ static int migtd_wait_for_request(struct kvm_tdx *kvm_tdx,
 	return len;
 }
 
+static void migtd_report_status_for_start_mig(struct kvm_tdx *kvm_tdx,
+				struct tdvmcall_service_migtd *cmd_migtd)
+{
+	if (cmd_migtd->status != TDVMCALL_SERVICE_MIGTD_STATUS_SUCC) {
+		pr_err("Migration preparation failed, status=%x\n",
+			cmd_migtd->status);
+	} else {
+		pr_info("Migration preparation is done, userspace pid=%d\n",
+			 kvm_tdx->kvm.userspace_pid);
+	}
+}
+
+/*
+ * Return length of filled bytes. 0 bytes means that the operation isn't
+ * supported.
+ */
+static int migtd_report_status(struct kvm_tdx *kvm_tdx,
+			       struct tdvmcall_service_migtd *cmd_migtd)
+{
+	int len = sizeof(struct tdvmcall_service_migtd);
+
+	switch (cmd_migtd->operation) {
+	case TDVMCALL_SERVICE_MIGTD_OP_NOOP:
+		break;
+	case TDVMCALL_SERVICE_MIGTD_OP_START_MIG:
+		migtd_report_status_for_start_mig(kvm_tdx, cmd_migtd);
+		break;
+	default:
+		len = 0;
+		pr_err("MigTD report operation not supported\n");
+	}
+
+	return len;
+}
+
 /* Return true if the response isn't ready and need to block the vcpu */
 static bool tdx_handle_service_migtd(struct kvm_tdx *kvm_tdx,
 				     struct tdvmcall_service *cmd_hdr,
@@ -1693,6 +1731,19 @@ static bool tdx_handle_service_migtd(struct kvm_tdx *kvm_tdx,
 		}
 		len = migtd_wait_for_request(kvm_tdx, resp_migtd, &need_block);
 		status = TDVMCALL_SERVICE_S_RETURNED;
+		break;
+	case TDVMCALL_SERVICE_MIGTD_CMD_REPORT:
+		resp_migtd->version = TDVMCALL_SERVICE_MIGTD_REPORT_VERSION;
+		if (cmd_migtd->version != resp_migtd->version) {
+			pr_err("MigTD REPORT cmd version doesn't match\n");
+			status = TDVMCALL_SERVICE_S_UNSUPP;
+			break;
+		}
+		len = migtd_report_status(kvm_tdx, cmd_migtd);
+		if (len)
+			status = TDVMCALL_SERVICE_S_RETURNED;
+		else
+			status = TDVMCALL_SERVICE_S_UNSUPP;
 		break;
 	default:
 		pr_err("MigTD cmd %d not supported\n", cmd_migtd->cmd);
