@@ -579,6 +579,9 @@ enum kvm_tdx_cmd_id {
 	KVM_TDX_CMD_NR_MAX,
 };
 
+/* Set to delay TD initialization (i.e. TDH.MNG.INIT). */
+#define KVM_TDX_INIT_VM_F_DELAY_INIT	1
+
 struct kvm_tdx_cmd {
 	/* enum kvm_tdx_cmd_id */
 	__u32 id;
