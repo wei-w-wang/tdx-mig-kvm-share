@@ -23,19 +23,22 @@ static inline u64 tdx_seamcall(u64 op, struct tdx_module_args *in,
 			       struct tdx_module_args *out)
 {
 	struct tdx_module_args args;
-	int retry;
+	int retry = TDX_SEAMCALL_RETRY_MAX;
 	u64 ret;
 
 	if (!out)
 		out = &args;
 
-	/* Mimic the existing rdrand_long() to retry RDRAND_RETRY_LOOPS times. */
-	retry = RDRAND_RETRY_LOOPS;
 	do {
 		/* As __seamcall_ret() overwrites out, init out on each loop. */
 		*out = *in;
 		ret = __seamcall_ret(op, out);
-	} while (unlikely(ret == TDX_RND_NO_ENTROPY) && --retry);
+		if (!ret ||
+		    ret == TDX_VCPU_ASSOCIATED ||
+		    ret == TDX_VCPU_NOT_ASSOCIATED ||
+		    ret == TDX_INTERRUPTED_RESUMABLE)
+			return ret;
+	} while (TDX_SEAMCALL_ERR_RECOVERABLE(ret) && --retry);
 	if (unlikely(ret == TDX_SEAMCALL_UD)) {
 		/*
 		 * SEAMCALLs fail with TDX_SEAMCALL_UD returned when VMX is off.
