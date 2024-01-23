@@ -552,30 +552,26 @@ void tdx_mmu_release_hkid(struct kvm *kvm)
 		;
 }
 
-static void __tdx_vm_free(struct kvm *kvm)
+static void tdx_vm_free_tdcs(struct kvm_tdx *kvm_tdx)
 {
-	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
-	u64 err;
 	int i;
 
-	/*
-	 * tdx_mmu_release_hkid() failed to reclaim HKID.  Something went wrong
-	 * heavily with TDX module.  Give up freeing TD pages.  As the function
-	 * already warned, don't warn it again.
-	 */
-	if (is_hkid_assigned(kvm_tdx))
+	if (!kvm_tdx->tdcs_pa)
 		return;
 
-	if (kvm_tdx->tdcs_pa) {
-		for (i = 0; i < tdx_info->nr_tdcs_pages; i++) {
-			if (!kvm_tdx->tdcs_pa[i])
-				continue;
-			tdx_reclaim_control_page(kvm_tdx->tdcs_pa[i]);
-			tdx_unaccount_ctl_page(kvm);
-		}
-		kfree(kvm_tdx->tdcs_pa);
-		kvm_tdx->tdcs_pa = NULL;
+	for (i = 0; i < tdx_info->nr_tdcs_pages; i++) {
+		if (!kvm_tdx->tdcs_pa[i])
+			continue;
+		tdx_reclaim_control_page(kvm_tdx->tdcs_pa[i]);
+		tdx_unaccount_ctl_page(&kvm_tdx->kvm);
 	}
+	kfree(kvm_tdx->tdcs_pa);
+	kvm_tdx->tdcs_pa = NULL;
+}
+
+static void tdx_vm_free_tdr(struct kvm_tdx *kvm_tdx)
+{
+	u64 err;
 
 	if (!kvm_tdx->tdr_pa)
 		return;
@@ -594,12 +590,32 @@ static void __tdx_vm_free(struct kvm *kvm)
 	}
 	tdx_clear_page(kvm_tdx->tdr_pa, PAGE_SIZE);
 
-	tdx_unaccount_ctl_page(kvm);
+	tdx_unaccount_ctl_page(&kvm_tdx->kvm);
 	free_page((unsigned long)__va(kvm_tdx->tdr_pa));
 	kvm_tdx->tdr_pa = 0;
+}
 
+static void tdx_vm_free_cpuid(struct kvm_tdx *kvm_tdx)
+{
 	kfree(kvm_tdx->cpuid);
 	kvm_tdx->cpuid = NULL;
+}
+
+static void __tdx_vm_free(struct kvm *kvm)
+{
+	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
+
+	/*
+	 * tdx_mmu_release_hkid() failed to reclaim HKID.  Something went wrong
+	 * heavily with TDX module.  Give up freeing TD pages.  As the function
+	 * already warned, don't warn it again.
+	 */
+	if (is_hkid_assigned(kvm_tdx))
+		return;
+
+	tdx_vm_free_tdcs(kvm_tdx);
+	tdx_vm_free_tdr(kvm_tdx);
+	tdx_vm_free_cpuid(kvm_tdx);
 }
 
 void tdx_vm_free(struct kvm *kvm)
