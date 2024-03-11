@@ -525,4 +525,30 @@ static inline u64 tdh_export_unblockw(hpa_t tdr,
 	return tdx_seamcall(TDH_EXPORT_UNBLOCKW, &in, out);
 }
 
+static inline u64 tdh_export_track(hpa_t tdr,
+				   u64 mbmd_info,
+				   u64 mig_stream_info)
+{
+	struct tdx_module_args in = {
+		.rcx = tdr,
+		.r8 = mbmd_info,
+		.r10 = mig_stream_info,
+	};
+
+	return tdx_seamcall(TDH_EXPORT_TRACK, &in, NULL);
+}
+
+static inline u64 tdh_import_track(hpa_t tdr,
+				   u64 mbmd_info,
+				   u64 mig_stream_info)
+{
+	struct tdx_module_args in = {
+		.rcx = tdr,
+		.r8 = mbmd_info,
+		.r10 = mig_stream_info,
+	};
+
+	return tdx_seamcall(TDH_IMPORT_TRACK, &in, NULL);
+}
+
 #endif /* __KVM_X86_TDX_OPS_H */
