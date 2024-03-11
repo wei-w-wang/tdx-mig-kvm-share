@@ -501,4 +501,28 @@ static inline u64 tdh_import_state_immutable(hpa_t tdr,
 	return tdx_seamcall(TDH_IMPORT_STATE_IMMUTABLE, &in, out);
 }
 
+static inline u64 tdh_export_blockw(hpa_t tdr,
+				    u64 gpa_list_info,
+				    struct tdx_module_args *out)
+{
+	struct tdx_module_args in = {
+		.rcx = gpa_list_info,
+		.rdx = tdr,
+	};
+
+	return tdx_seamcall(TDH_EXPORT_BLOCKW, &in, out);
+}
+
+static inline u64 tdh_export_unblockw(hpa_t tdr,
+				      u64 ept_info,
+				      struct tdx_module_args *out)
+{
+	struct tdx_module_args in = {
+		.rcx = ept_info,
+		.rdx = tdr,
+	};
+
+	return tdx_seamcall(TDH_EXPORT_UNBLOCKW, &in, out);
+}
+
 #endif /* __KVM_X86_TDX_OPS_H */
