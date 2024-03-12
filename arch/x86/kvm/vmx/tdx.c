@@ -740,8 +740,6 @@ int tdx_vcpu_create(struct kvm_vcpu *vcpu)
 	vcpu->arch.cr0_guest_owned_bits = -1ul;
 	vcpu->arch.cr4_guest_owned_bits = -1ul;
 
-	vcpu->arch.tsc_offset = to_kvm_tdx(vcpu->kvm)->tsc_offset;
-	vcpu->arch.l1_tsc_offset = vcpu->arch.tsc_offset;
 	/*
 	 * TODO: support off-TD debug.  If TD DEBUG is enabled, guest state
 	 * can be accessed. guest_state_protected = false. and kvm ioctl to
@@ -3331,6 +3329,38 @@ out:
 	return r;
 }
 
+static int tdx_td_vcpu_setup(struct kvm_vcpu *vcpu)
+{
+	struct kvm_tdx *kvm_tdx = to_kvm_tdx(vcpu->kvm);
+	struct vcpu_tdx *tdx = to_tdx(vcpu);
+	unsigned long *tdvpx_pa = tdx->tdvpx_pa;
+	int i;
+	u64 err;
+
+	err = tdh_vp_create(kvm_tdx->tdr_pa, tdx->tdvpr_pa);
+	if (KVM_BUG_ON(err, vcpu->kvm)) {
+		pr_tdx_error(TDH_VP_CREATE, err, NULL);
+		return -EIO;
+	}
+	tdx_account_ctl_page(vcpu->kvm);
+
+	for (i = 0; i < tdx_info->nr_tdvpx_pages; i++) {
+		err = tdh_vp_addcx(tdx->tdvpr_pa, tdvpx_pa[i]);
+		if (KVM_BUG_ON(err, vcpu->kvm)) {
+			pr_tdx_error(TDH_VP_ADDCX, err, NULL);
+			for (; i < tdx_info->nr_tdvpx_pages; i++) {
+				free_page((unsigned long)__va(tdvpx_pa[i]));
+				tdvpx_pa[i] = 0;
+			}
+			/* vcpu_free method frees TDVPX and TDR donated to TDX */
+			return -EIO;
+		}
+		tdx_account_ctl_page(vcpu->kvm);
+	}
+
+	return 0;
+}
+
 /* VMM can pass one 64bit auxiliary data to vcpu via RCX for guest BIOS. */
 static int tdx_td_vcpu_init(struct kvm_vcpu *vcpu, u64 vcpu_rcx)
 {
@@ -3369,29 +3399,23 @@ static int tdx_td_vcpu_init(struct kvm_vcpu *vcpu, u64 vcpu_rcx)
 		tdvpx_pa[i] = __pa(va);
 	}
 
-	err = tdh_vp_create(kvm_tdx->tdr_pa, tdvpr_pa);
-	if (KVM_BUG_ON(err, vcpu->kvm)) {
-		ret = -EIO;
-		pr_tdx_error(TDH_VP_CREATE, err, NULL);
-		goto free_tdvpx;
-	}
 	tdx->tdvpr_pa = tdvpr_pa;
-	tdx_account_ctl_page(vcpu->kvm);
-
 	tdx->tdvpx_pa = tdvpx_pa;
-	for (i = 0; i < tdx_info->nr_tdvpx_pages; i++) {
-		err = tdh_vp_addcx(tdx->tdvpr_pa, tdvpx_pa[i]);
-		if (KVM_BUG_ON(err, vcpu->kvm)) {
-			pr_tdx_error(TDH_VP_ADDCX, err, NULL);
-			for (; i < tdx_info->nr_tdvpx_pages; i++) {
-				free_page((unsigned long)__va(tdvpx_pa[i]));
-				tdvpx_pa[i] = 0;
-			}
-			/* vcpu_free method frees TDVPX and TDR donated to TDX */
-			return -EIO;
-		}
-		tdx_account_ctl_page(vcpu->kvm);
-	}
+
+	WARN_ON_ONCE(kvm_apicv_activated(vcpu->kvm));
+	vcpu->arch.apic->apicv_active = false;
+
+	/*
+	 * Keep the tdvpr and tdvpx pages allocated above, but adding them to
+	 * the TDX module and the TDH_VP_CREATE seamcall require TD to be
+	 * initialized.
+	 */
+	if (!kvm_tdx->td_initialized)
+		return 0;
+
+	ret = tdx_td_vcpu_setup(vcpu);
+	if (ret)
+		goto free_tdvpx;
 
 	err = tdh_vp_init(tdx->tdvpr_pa, vcpu_rcx);
 	if (KVM_BUG_ON(err, vcpu->kvm)) {
@@ -3399,9 +3423,6 @@ static int tdx_td_vcpu_init(struct kvm_vcpu *vcpu, u64 vcpu_rcx)
 		return -EIO;
 	}
 
-	WARN_ON_ONCE(kvm_apicv_activated(vcpu->kvm));
-	vcpu->arch.apic->apicv_active = false;
-	vcpu->arch.mp_state = KVM_MP_STATE_RUNNABLE;
 	tdx->td_vcpu_created = true;
 	return 0;
 
@@ -3460,6 +3481,28 @@ static int tdx_vcpu_init_mtrr(struct kvm_vcpu *vcpu)
 	return 0;
 }
 
+static void tdx_td_vcpu_post_init(struct vcpu_tdx *tdx)
+{
+	struct kvm_vcpu *vcpu = &tdx->vcpu;
+	struct kvm_tdx *kvm_tdx = to_kvm_tdx(vcpu->kvm);
+
+	if (!kvm_tdx->td_initialized)
+		return;
+
+	td_vmcs_write16(tdx, POSTED_INTR_NV, POSTED_INTR_VECTOR);
+	td_vmcs_write64(tdx, POSTED_INTR_DESC_ADDR, __pa(&tdx->pi_desc));
+	td_vmcs_setbit32(tdx, PIN_BASED_VM_EXEC_CONTROL, PIN_BASED_POSTED_INTR);
+
+	if (vcpu->kvm->arch.bus_lock_detection_enabled)
+		td_vmcs_setbit32(tdx, SECONDARY_VM_EXEC_CONTROL,
+				 SECONDARY_EXEC_BUS_LOCK_DETECTION);
+
+	vcpu->arch.tsc_offset = to_kvm_tdx(vcpu->kvm)->tsc_offset;
+	vcpu->arch.l1_tsc_offset = vcpu->arch.tsc_offset;
+	vcpu->arch.mp_state = KVM_MP_STATE_RUNNABLE;
+	tdx->initialized = true;
+}
+
 int tdx_vcpu_ioctl(struct kvm_vcpu *vcpu, void __user *argp)
 {
 	struct msr_data apic_base_msr;
@@ -3505,16 +3548,8 @@ int tdx_vcpu_ioctl(struct kvm_vcpu *vcpu, void __user *argp)
 	if (ret)
 		return ret;
 
-	td_vmcs_write16(tdx, POSTED_INTR_NV, POSTED_INTR_VECTOR);
-	td_vmcs_write64(tdx, POSTED_INTR_DESC_ADDR, __pa(&tdx->pi_desc));
-	td_vmcs_setbit32(tdx, PIN_BASED_VM_EXEC_CONTROL, PIN_BASED_POSTED_INTR);
+	tdx_td_vcpu_post_init(tdx);
 
-	if (vcpu->kvm->arch.bus_lock_detection_enabled)
-		td_vmcs_setbit32(tdx,
-				 SECONDARY_VM_EXEC_CONTROL,
-				 SECONDARY_EXEC_BUS_LOCK_DETECTION);
-
-	tdx->initialized = true;
 	return 0;
 }
 
