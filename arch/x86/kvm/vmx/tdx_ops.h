@@ -560,4 +560,51 @@ static inline u64 tdh_import_commit(hpa_t tdr)
 	return tdx_seamcall(TDH_IMPORT_COMMIT, &in, NULL);
 }
 
+static inline u64 tdh_export_mem(hpa_t tdr,
+				 u64 mbmd_info,
+				 u64 gpa_list_info,
+				 u64 buf_list_info,
+				 u64 mac_list0_info,
+				 u64 mac_list1_info,
+				 u64 mig_stream_info,
+				 struct tdx_module_args *out)
+
+{
+	struct tdx_module_args in = {
+		.rcx = gpa_list_info,
+		.rdx = tdr,
+		.r8 = mbmd_info,
+		.r9 = buf_list_info,
+		.r10 = mig_stream_info,
+		.r11 = mac_list0_info,
+		.r12 = mac_list1_info,
+	};
+
+	return tdx_seamcall_saved(TDH_EXPORT_MEM, &in, out);
+}
+
+static inline u64 tdh_import_mem(hpa_t tdr,
+				 u64 mbmd_info,
+				 u64 gpa_list_info,
+				 u64 buf_list_info,
+				 u64 mac_list0_info,
+				 u64 mac_list1_info,
+				 u64 td_page_list_info,
+				 u64 mig_stream_info,
+				 struct tdx_module_args *out)
+{
+	struct tdx_module_args in = {
+		.rcx = gpa_list_info,
+		.rdx = tdr,
+		.r8 = mbmd_info,
+		.r9 = buf_list_info,
+		.r10 = mig_stream_info,
+		.r11 = mac_list0_info,
+		.r12 = mac_list1_info,
+		.r13 = td_page_list_info,
+	};
+
+	return tdx_seamcall_saved(TDH_IMPORT_MEM, &in, out);
+}
+
 #endif /* __KVM_X86_TDX_OPS_H */
