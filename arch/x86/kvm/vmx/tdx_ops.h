@@ -607,4 +607,12 @@ static inline u64 tdh_import_mem(hpa_t tdr,
 	return tdx_seamcall_saved(TDH_IMPORT_MEM, &in, out);
 }
 
+static inline u64 tdh_export_pasue(hpa_t tdr)
+{
+	struct tdx_module_args in = {
+		.rcx = tdr,
+	};
+
+	return tdx_seamcall(TDH_EXPORT_PAUSE, &in, NULL);
+}
 #endif /* __KVM_X86_TDX_OPS_H */
