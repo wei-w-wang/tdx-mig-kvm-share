@@ -734,5 +734,9 @@ int tdx_mig_start(struct kvm *kvm, struct kvm_cgm_data *data)
 	if (mig_state->is_src)
 		return tdx_mig_export_state_immutable(kvm_tdx, stream, data);
 
-	return tdx_mig_import_state_immutable(kvm_tdx, stream, data);
+	ret = tdx_mig_import_state_immutable(kvm_tdx, stream, data);
+	if (ret < 0)
+		return ret;
+
+	return kvm_prealloc_private_pages(&kvm_tdx->kvm, true);
 }
