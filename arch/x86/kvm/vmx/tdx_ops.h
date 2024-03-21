@@ -680,4 +680,13 @@ static inline u64 tdh_import_state_vp(hpa_t tdvpr,
 	return tdx_seamcall(TDH_IMPORT_STATE_VP, &in, out);
 }
 
+static inline u64 tdh_import_end(hpa_t tdr)
+{
+	struct tdx_module_args in = {
+		.rcx = tdr,
+	};
+
+	return tdx_seamcall(TDH_IMPORT_END, &in, NULL);
+}
+
 #endif /* __KVM_X86_TDX_OPS_H */
