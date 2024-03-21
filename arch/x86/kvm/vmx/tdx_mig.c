@@ -965,6 +965,28 @@ static int tdx_mig_stream_memory_buffer_init(struct tdx_mig_stream *stream,
 	return 0;
 }
 
+static void tdx_mig_handle_export_mem_error(struct kvm *kvm,
+					    struct tdx_mig_stream *stream,
+					    uint64_t npages)
+{
+	union tdx_mig_gpa_list_entry *entries;
+	uint64_t i;
+	int idx;
+
+	entries = stream->gpa_list.entries;
+	for (i = 0; i < npages; i++) {
+		/*
+		 * Re-migrate the failed entries by putting them back to the
+		 * dirty bitmap.
+		 */
+		if (entries[i].status != GPA_LIST_S_SUCCESS) {
+			idx = srcu_read_lock(&kvm->srcu);
+			mark_page_dirty(kvm, (gfn_t)entries[i].gfn);
+			srcu_read_unlock(&kvm->srcu, idx);
+		}
+	}
+}
+
 static void tdx_mig_stream_combine_memory_state(struct tdx_mig_stream *stream,
 						uint16_t gfn_num)
 {
@@ -1061,6 +1083,15 @@ int tdx_mig_get_memory_state(struct kvm *kvm, gfn_t *gfns, uint16_t gfn_num,
 		pr_err("Failed to export memory pages: %llx\n",err);
 		return -EIO;
 	}
+
+	/*
+	 * A general success could have some entries failed, and this does not
+	 * abort the seamcall. That is, the masked status is still TDX_SUCCESS,
+	 * but some of the masked bits (i.e., the lower 32 bits reports the
+	 * number failed entries).
+	 */
+	if (err != TDX_SUCCESS)
+		tdx_mig_handle_export_mem_error(&kvm_tdx->kvm, stream, gfn_num);
 
 	tdx_mig_stream_combine_memory_state(stream, gfn_num);
 
