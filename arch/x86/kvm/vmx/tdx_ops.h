@@ -689,4 +689,17 @@ static inline u64 tdh_import_end(hpa_t tdr)
 	return tdx_seamcall(TDH_IMPORT_END, &in, NULL);
 }
 
+static inline u64 tdh_export_abort(hpa_t tdr,
+				   u64 mbmd_info,
+				   u64 mig_stream_info)
+{
+	struct tdx_module_args in = {
+		.rcx = tdr,
+		.r8 = mbmd_info,
+		.r10 = mig_stream_info,
+	};
+
+	return tdx_seamcall(TDH_EXPORT_ABORT, &in, NULL);
+}
+
 #endif /* __KVM_X86_TDX_OPS_H */
