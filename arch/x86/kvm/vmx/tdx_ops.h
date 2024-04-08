@@ -19,8 +19,8 @@
 #include "tdx_arch.h"
 #include "x86.h"
 
-static inline u64 tdx_seamcall(u64 op, struct tdx_module_args *in,
-			       struct tdx_module_args *out)
+static inline u64 __tdx_seamcall(u64 op, struct tdx_module_args *in,
+				 struct tdx_module_args *out, bool need_saved)
 {
 	struct tdx_module_args args;
 	int retry = TDX_SEAMCALL_RETRY_MAX;
@@ -32,7 +32,11 @@ static inline u64 tdx_seamcall(u64 op, struct tdx_module_args *in,
 	do {
 		/* As __seamcall_ret() overwrites out, init out on each loop. */
 		*out = *in;
-		ret = __seamcall_ret(op, out);
+		if (need_saved)
+			ret = __seamcall_saved_ret(op, out);
+		else
+			ret = __seamcall_ret(op, out);
+
 		if (!ret ||
 		    ret == TDX_VCPU_ASSOCIATED ||
 		    ret == TDX_VCPU_NOT_ASSOCIATED ||
@@ -52,6 +56,18 @@ static inline u64 tdx_seamcall(u64 op, struct tdx_module_args *in,
 		return 0;
 	}
 	return ret;
+}
+
+static inline u64 tdx_seamcall(u64 op, struct tdx_module_args *in,
+			       struct tdx_module_args *out)
+{
+	return __tdx_seamcall(op, in, out, false);
+}
+
+static inline u64 tdx_seamcall_saved(u64 op, struct tdx_module_args *in,
+				     struct tdx_module_args *out)
+{
+	return __tdx_seamcall(op, in, out, true);
 }
 
 #ifdef CONFIG_INTEL_TDX_HOST
