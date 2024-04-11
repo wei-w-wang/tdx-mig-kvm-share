@@ -3181,8 +3181,12 @@ static int tdx_init_mem_region(struct kvm *kvm, struct kvm_tdx_cmd *cmd)
 	int idx, ret = 0;
 	bool added = false;
 
-	/* Once TD is finalized, the initial guest memory is fixed. */
-	if (is_td_finalized(kvm_tdx))
+	/*
+	 * The memory region can be initialized only after TD is initialized
+	 * and before TD is finalized. Once TD is finalized, the initial guest
+	 * memory is fixed.
+	 */
+	if (!kvm_tdx->td_initialized || is_td_finalized(kvm_tdx))
 		return -EINVAL;
 
 	/* The BSP vCPU must be created before initializing memory regions. */
