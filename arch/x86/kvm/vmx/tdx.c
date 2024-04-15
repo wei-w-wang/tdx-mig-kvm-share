@@ -900,6 +900,8 @@ void tdx_vcpu_free(struct kvm_vcpu *vcpu)
 		tdx->tdvpr_pa = 0;
 		tdx_unaccount_ctl_page(vcpu->kvm);
 	}
+
+	tdx->initialized = false;
 }
 
 void tdx_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
