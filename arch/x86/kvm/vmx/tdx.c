@@ -4207,6 +4207,13 @@ static int __init tdx_module_setup(void)
 
 	pr_info("nr_tdcs %d nr_tdvpx %d\n",
 		tdx_info->nr_tdcs_pages, tdx_info->nr_tdvpx_pages);
+
+	ret = tdx_mig_capabilities_setup();
+	if (ret)
+		pr_info("tdx: live migration not supported\n");
+	else
+		pr_info("tdx: live migration supported\n");
+
 	return 0;
 
 error_sys_rd:

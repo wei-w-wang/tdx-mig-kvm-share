@@ -15,6 +15,44 @@
 /* Defined by the TDX ABI spec */
 #define TDX_SERVTD_TYPE_MIGTD		0
 
+struct tdx_mig_capabilities {
+	uint32_t max_migs;
+	uint32_t immutable_state_pages;
+	uint32_t td_state_pages;
+	uint32_t vcpu_state_pages;
+};
+
+static struct tdx_mig_capabilities tdx_mig_caps;
+
+static int tdx_mig_capabilities_setup(void)
+{
+	uint64_t value;
+	int ret;
+
+	ret = tdx_sys_metadata_field_read(MD_FIELD_ID_MAX_MIGS, &value);
+	if (ret)
+		return ret;
+	tdx_mig_caps.max_migs = (uint32_t)value;
+
+	ret = tdx_sys_metadata_field_read(MD_FIELD_ID_IMMUTABLE_STATE_PAGES,
+					  &value);
+	if (ret)
+		return ret;
+	tdx_mig_caps.immutable_state_pages = (uint32_t)value;
+
+	ret = tdx_sys_metadata_field_read(MD_FIELD_ID_TD_STATE_PAGES, &value);
+	if (ret)
+		return ret;
+	tdx_mig_caps.td_state_pages = (uint32_t)value;
+
+	ret = tdx_sys_metadata_field_read(MD_FIELD_ID_VP_STATE_PAGES, &value);
+	if (ret)
+		return ret;
+	tdx_mig_caps.vcpu_state_pages = (uint32_t)value;
+
+	return 0;
+}
+
 static int tdx_mig_prebind_migtd(struct kvm_tdx *kvm_tdx, void *hash)
 {
 	struct page *hash_page;
