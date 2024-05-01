@@ -187,6 +187,8 @@ int tdx_sept_flush_remote_tlbs_range(struct kvm *kvm, gfn_t gfn, gfn_t nr_pages)
 void tdx_load_mmu_pgd(struct kvm_vcpu *vcpu, hpa_t root_hpa, int root_level);
 
 int tdx_vm_move_enc_context_from(struct kvm *kvm, unsigned int source_fd);
+
+int tdx_mig_prepare(struct kvm *kvm, struct kvm_cgm_prepare *prepare);
 #else
 static inline int tdx_hardware_setup(struct kvm_x86_ops *x86_ops) { return -EOPNOTSUPP; }
 static inline void tdx_hardware_unsetup(void) {}
@@ -252,6 +254,13 @@ static inline int tdx_vm_move_enc_context_from(struct kvm *kvm, unsigned int sou
 {
 	return -EOPNOTSUPP;
 }
+
+static inline int tdx_mig_prepare(struct kvm *kvm,
+				  struct kvm_cgm_migration_prepare *prepare)
+{
+	return -EOPNOTSUPP;
+}
+
 #endif
 
 #if defined(CONFIG_INTEL_TDX_HOST) && defined(CONFIG_KVM_SMM)

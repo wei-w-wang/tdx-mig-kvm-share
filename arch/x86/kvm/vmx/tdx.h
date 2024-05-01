@@ -8,6 +8,17 @@
 #include "pmu_intel.h"
 #include "tdx_ops.h"
 
+struct tdx_binding_info {
+	/* Is the source side MigTD */
+	bool is_src;
+	/* Number of users of the binding_info memory */
+	refcount_t users_count;
+	/* Identify the user TD and the binding slot */
+	uint64_t handle;
+	/* UUID of the user TD */
+	uint8_t  uuid[32];
+};
+
 struct kvm_tdx {
 	struct kvm kvm;
 
@@ -53,6 +64,7 @@ struct kvm_tdx {
 	atomic64_t sept_pages[PG_LEVEL_NUM - PG_LEVEL_4K];
 	atomic64_t td_pages;
 #endif
+	struct tdx_binding_info *binding_info;
 };
 
 union tdx_exit_reason {

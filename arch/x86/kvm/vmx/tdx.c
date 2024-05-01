@@ -18,6 +18,8 @@
 #include <trace/events/kvm.h>
 #include "trace.h"
 
+#include "tdx_mig.c"
+
 #undef pr_fmt
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
@@ -608,6 +610,7 @@ static void __tdx_vm_free(struct kvm *kvm)
 	if (is_hkid_assigned(kvm_tdx))
 		return;
 
+	tdx_put_binding_info(kvm_tdx);
 	tdx_vm_free_tdcs(kvm_tdx);
 	tdx_vm_free_tdr(kvm_tdx);
 	tdx_vm_free_cpuid(kvm_tdx);
