@@ -1709,6 +1709,7 @@ static int migtd_report_status(struct kvm_tdx *kvm_tdx,
 
 /* Return true if the response isn't ready and need to block the vcpu */
 static bool tdx_handle_service_migtd(struct kvm_tdx *kvm_tdx,
+				     struct kvm_vcpu *vcpu,
 				     struct tdvmcall_service *cmd_hdr,
 				     struct tdvmcall_service *resp_hdr)
 {
@@ -1744,6 +1745,8 @@ static bool tdx_handle_service_migtd(struct kvm_tdx *kvm_tdx,
 			status = TDVMCALL_SERVICE_S_RETURNED;
 		else
 			status = TDVMCALL_SERVICE_S_UNSUPP;
+
+		kvm_make_request(KVM_REQ_SYSTEM_EVENT_SHUTDOWN, vcpu);
 		break;
 	default:
 		pr_err("MigTD cmd %d not supported\n", cmd_migtd->cmd);
@@ -1791,7 +1794,7 @@ static int tdx_handle_service(struct kvm_vcpu *vcpu)
 		break;
 	case TDVMCALL_SERVICE_ID_MIGTD:
 		need_block = tdx_handle_service_migtd(kvm_tdx,
-						      cmd_buf, resp_buf);
+						      vcpu, cmd_buf, resp_buf);
 		break;
 	default:
 		resp_buf->status = TDVMCALL_SERVICE_S_UNSUPP;
