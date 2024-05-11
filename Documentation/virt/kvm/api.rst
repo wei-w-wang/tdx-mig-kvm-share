@@ -6377,6 +6377,23 @@ provides a buffer via "struct kvm_cgm_data" to the secure firmware via KVM, and
 the buffer will be loaded with the token data, with the data size set to
 "struct kvm_cgm_data", on return of the ioctl.
 
+4.146 KVM_CGM_SET_EPOCH_TOKEN
+---------------------------------
+
+:Capability: KVM_CGM_CAP
+:Architectures: x86
+:Type: vm ioctl
+:Parameters: struct kvm_cgm_data (in)
+:Returns: 0 on success, < 0 on error
+
+KVM_CGM_SET_EPOCH_TOKEN is used by userspace, on the live migration destination
+side, to request the secure firmware (e.g. TDX module) via KVM to set an epoch
+token which is received from the source side via KVM_CGM_GET_EPOCH_TOKEN.
+
+Userspace provides a buffer via "struct kvm_cgm_data" to the secure firmware
+via KVM, and the buffer, which has been loaded with the token data, will be
+read by the vendor-specific secure firmware.
+
 5. The kvm_run structure
 ========================
 
