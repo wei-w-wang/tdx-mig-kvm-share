@@ -164,6 +164,7 @@ KVM_X86_OP_OPTIONAL(post_memory_mapping);
 KVM_X86_OP_OPTIONAL(cgm_enable_cap)
 KVM_X86_OP_OPTIONAL(cgm_prepare)
 KVM_X86_OP_OPTIONAL(cgm_start)
+KVM_X86_OP_OPTIONAL(cgm_get_epoch_token)
 
 #undef KVM_X86_OP
 #undef KVM_X86_OP_OPTIONAL

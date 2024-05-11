@@ -6356,6 +6356,27 @@ the initialization data on return of the ioctl. On the destination side, the
 buffer has been loaded with the initialization data received from the source
 and will be read by the secure firmware to do a preliminary initialization.
 
+4.145 KVM_CGM_GET_EPOCH_TOKEN
+---------------------------------
+
+:Capability: KVM_CGM_CAP
+:Architectures: x86
+:Type: vm ioctl
+:Parameters: struct kvm_cgm_data (in/out)
+:Returns: 0 on success, < 0 on error
+
+KVM_CGM_GET_EPOCH_TOKEN is used by userspace, on the live migration source
+side, to request the secure firmware (e.g. TDX module) via KVM to get an epoch
+token. The token acts as a boundary marker between migration epochs (also known
+as pre-copy iterations). This mechanism helps prevent replay attacks.
+
+The epoch token data is utilized by the vendor-specific secure firmware. VMM
+does not need to parse the token data. Instead, the VMM's role is to transfer
+the token data from the source to the destination secure firmware. Userspace
+provides a buffer via "struct kvm_cgm_data" to the secure firmware via KVM, and
+the buffer will be loaded with the token data, with the data size set to
+"struct kvm_cgm_data", on return of the ioctl.
+
 5. The kvm_run structure
 ========================
 
