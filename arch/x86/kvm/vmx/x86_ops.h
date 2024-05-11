@@ -191,6 +191,7 @@ int tdx_vm_move_enc_context_from(struct kvm *kvm, unsigned int source_fd);
 int tdx_mig_prepare(struct kvm *kvm, struct kvm_cgm_prepare *prepare);
 int tdx_mig_enable_cap(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm);
 int tdx_mig_start(struct kvm *kvm, struct kvm_cgm_data *data);
+int tdx_mig_get_epoch_token(struct kvm *kvm, struct kvm_cgm_data *data);
 #else
 static inline int tdx_hardware_setup(struct kvm_x86_ops *x86_ops) { return -EOPNOTSUPP; }
 static inline void tdx_hardware_unsetup(void) {}
@@ -269,6 +270,12 @@ static inline int tdx_mig_prepare(struct kvm *kvm,
 }
 
 static inline int tdx_mig_start(struct kvm *kvm, void __user *argp)
+{
+	return -EOPNOTSUPP;
+}
+
+static inline int tdx_mig_get_epoch_token(struct kvm *kvm,
+					  struct kvm_cgm_data *data)
 {
 	return -EOPNOTSUPP;
 }
