@@ -7380,6 +7380,45 @@ set_pit2_out:
 		r = static_call(kvm_x86_cgm_set_epoch_token)(kvm, &data);
 		break;
 	}
+	case KVM_CGM_GET_MEMORY_STATE: {
+		struct kvm_cgm_memory_state memory_state;
+		struct kvm_cgm_data *data;
+		void __user *gfns_u;
+		gfn_t *gfns;
+		uint16_t gfn_num;
+
+		r = -ENOTTY;
+		if (!kvm_x86_ops.cgm_get_memory_state)
+			goto out;
+		r = -EFAULT;
+		if (copy_from_user(&memory_state, argp, sizeof(memory_state)))
+			goto out;
+		r = -EINVAL;
+		gfn_num = memory_state.gfn_num;
+		if (gfn_num > KVM_CGM_GFN_NUM_MAX)
+			goto out;
+		r = -ENOMEM;
+		gfns = kzalloc(gfn_num * sizeof(gfn_t), GFP_KERNEL);
+		if (!gfns)
+			goto out;
+		r = -EFAULT;
+		gfns_u = (void __user *)(uintptr_t)memory_state.gfns_uaddr;
+		if (copy_from_user(gfns, gfns_u, gfn_num * sizeof(gfn_t))) {
+			kfree(gfns);
+			goto out;
+		}
+		data = &memory_state.data;
+		r = static_call(kvm_x86_cgm_get_memory_state)(kvm, gfns,
+							      gfn_num, data);
+		kfree(gfns);
+		if (r)
+			goto out;
+		r = -EFAULT;
+		if(copy_to_user(argp, &memory_state, sizeof(memory_state)))
+			goto out;
+		r = 0;
+		break;
+	}
 	default:
 		r = -ENOTTY;
 	}

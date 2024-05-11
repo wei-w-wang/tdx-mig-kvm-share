@@ -1862,6 +1862,8 @@ struct kvm_x86_ops {
 	int (*cgm_start)(struct kvm *kvm, struct kvm_cgm_data *data);
 	int (*cgm_get_epoch_token)(struct kvm *kvm, struct kvm_cgm_data *data);
 	int (*cgm_set_epoch_token)(struct kvm *kvm, struct kvm_cgm_data *data);
+	int (*cgm_get_memory_state)(struct kvm *kvm, gfn_t *gfns,
+				    uint16_t num, struct kvm_cgm_data *data);
 };
 
 struct kvm_x86_nested_ops {

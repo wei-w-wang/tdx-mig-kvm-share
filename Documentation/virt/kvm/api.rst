@@ -6394,6 +6394,35 @@ Userspace provides a buffer via "struct kvm_cgm_data" to the secure firmware
 via KVM, and the buffer, which has been loaded with the token data, will be
 read by the vendor-specific secure firmware.
 
+4.147 KVM_CGM_GET_MEMORY_STATE
+---------------------------------
+
+:Capability: KVM_CGM_CAP
+:Architectures: x86
+:Type: vm ioctl
+:Parameters: struct kvm_cgm_memory_state (in/out)
+:Returns: 0 on success, < 0 on error
+
+::
+
+  struct kvm_cgm_memory_state {
+	struct kvm_cgm_data data;
+	__u16 gfn_num;
+	__u8  pad1[6];
+	union {
+		__u64 gfns_uaddr;
+		__u8  pad2[8];
+	};
+  };
+
+KVM_CGM_GET_MEMORY_STATE is used by userspace, on the live migration source
+side, to request the secure firmware (e.g. TDX module) via KVM to get data of
+a list of guest private pages.
+
+Userspace supplies a buffer through "struct kvm_cgm_data" and a list of GFNs
+through @gfns_uaddr and @gfn_num to the secure firmware via KVM to load the
+data.
+
 5. The kvm_run structure
 ========================
 
