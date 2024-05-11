@@ -63,6 +63,7 @@ struct tdx_mig_mbmd {
 	uint64_t addr_and_size;
 };
 
+#define TDX_MIG_MAC_LIST_ENTRY_BYTES	16
 /*
  * Extra metadata appended to the TDX's MBMD (per state bundle) as an
  * extension. It's only used between the tdx_mig drivers on the source
@@ -931,5 +932,140 @@ int tdx_mig_set_epoch_token(struct kvm *kvm, struct kvm_cgm_data *data)
 		return -EIO;
 	}
 
+	return 0;
+}
+
+static int tdx_mig_stream_memory_buffer_init(struct tdx_mig_stream *stream,
+					     gfn_t *gfns, uint16_t gfn_num,
+					     uint64_t uaddr)
+{
+	struct tdx_mig_buf_list *mem_buf_list = &stream->mem_buf_list;
+	/* Plus MBMD page, gpa_list page and MAC list page */
+	uint16_t i, total_pages = gfn_num + 3;
+	struct page **pages = stream->pages;
+	long ret;
+
+	memset(pages, 0, total_pages * sizeof(struct page *));
+	ret = pin_user_pages_unlocked(uaddr, total_pages, pages, FOLL_WRITE);
+	if (ret != total_pages) {
+		unpin_user_pages(pages, ret);
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < gfn_num; i++) {
+		mem_buf_list->entries[i].pfn = page_to_pfn(pages[i]);
+		mem_buf_list->entries[i].invalid = false;
+	}
+	mem_buf_list->entries[i].invalid = true;
+
+	tdx_mig_stream_mbmd_init(stream, pages[i]);
+
+	tdx_mig_gpa_list_init(&stream->gpa_list,
+			      gfns, gfn_num, GPA_LIST_OP_EXPORT);
+	return 0;
+}
+
+static void tdx_mig_stream_combine_memory_state(struct tdx_mig_stream *stream,
+						uint16_t gfn_num)
+{
+	struct page **pages = stream->pages;
+	uint32_t data_size, buf_size;
+	uint8_t *src, *dst;
+	uint16_t i = gfn_num;
+	bool is_copying_macs = false;
+
+	/* Start to append GPA list data to the end of the MBMD data first */
+	dst = (uint8_t *)page_address(pages[i++]) + stream->mbmd.data->size;
+	buf_size = PAGE_SIZE - stream->mbmd.data->size;
+
+	src = (uint8_t *)stream->gpa_list.entries;
+	data_size = gfn_num * sizeof(union tdx_mig_gpa_list_info);
+	do {
+		if (buf_size >= data_size) {
+			memcpy(dst, src, data_size);
+			dst += data_size;
+			buf_size -= data_size;
+
+			if (is_copying_macs)
+				break;
+
+			/* Continue to append the mac list data */
+			data_size = gfn_num * TDX_MIG_MAC_LIST_ENTRY_BYTES;
+			src = (uint8_t *)stream->mac_list.entries;
+			is_copying_macs = true;
+		} else {
+			memcpy(dst, src, buf_size);
+			data_size -= buf_size;
+			src += buf_size;
+			/* Take a new page from uaddr as buffer to fill data */
+			dst = page_address(pages[i++]);
+			buf_size = PAGE_SIZE;
+		}
+	} while (1);
+}
+
+/*
+ * Memory bundle format (compacted data):
+ * 1. Memory data (takes one or more 4KB pages, depending on @gfn_num)
+ * 2. MBMD data (takes one 4KB page, but may not be fully used)
+ * 3. GPA list (append to the end of the MBMD data)
+ * 4. MAC list (append to the end of the GPA list data)
+ *
+ * From VMM's perspective, it's a blob of data stored in the buffers given by
+ * @data->uaddr, and the size of the blob to send to destination is returned
+ * in @data->size.
+ */
+int tdx_mig_get_memory_state(struct kvm *kvm, gfn_t *gfns, uint16_t gfn_num,
+			     struct kvm_cgm_data *data)
+{
+	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
+	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
+	struct tdx_mig_stream *stream = &mig_state->stream;
+	union tdx_mig_stream_info stream_info = {.val = 0};
+	uint64_t err, uaddr = data->uaddr;
+	struct tdx_module_args out;
+	int ret;
+
+	/*
+	 * Take pages from @uaddr for memory data and mbmd data export. For
+	 * gpa_list and mac_list data, use two 4KB temporary buffers for the
+	 * export. The exported gpa_list and mac_list data will be copied to
+	 * the uaddr following the mbmd data offset to make the data returned
+	 * to userspace compacted.
+	 */
+	ret = tdx_mig_stream_memory_buffer_init(stream, gfns, gfn_num, uaddr);
+	if (ret)
+		return ret;
+
+	stream_info.index = stream->idx;
+	do {
+		err = tdh_export_mem(kvm_tdx->tdr_pa,
+				     stream->mbmd.addr_and_size,
+				     stream->gpa_list.info.val,
+				     stream->mem_buf_list.hpa,
+				     stream->mac_list.hpa, 0,
+				     stream_info.val,
+				     &out);
+		if (seamcall_masked_status(err) == TDX_INTERRUPTED_RESUMABLE) {
+			stream_info.resume = 1;
+			/*
+			 * Update the gpa_list.info, mainly the first_entry
+			 * field, for TDX to know where to continue.
+			 */
+			stream->gpa_list.info.val = out.rcx;
+		}
+	} while (seamcall_masked_status(err) == TDX_INTERRUPTED_RESUMABLE);
+
+	unpin_user_pages(stream->pages, gfn_num + 3);
+	if (seamcall_masked_status(err) != TDX_SUCCESS) {
+		pr_err("Failed to export memory pages: %llx\n",err);
+		return -EIO;
+	}
+
+	tdx_mig_stream_combine_memory_state(stream, gfn_num);
+
+	data->size = PAGE_SIZE * gfn_num + stream->mbmd.data->size +
+		     sizeof(union tdx_mig_gpa_list_entry) * gfn_num +
+		     TDX_MIG_MAC_LIST_ENTRY_BYTES * gfn_num;
 	return 0;
 }

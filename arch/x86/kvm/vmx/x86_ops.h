@@ -197,6 +197,8 @@ int tdx_mig_enable_cap(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm);
 int tdx_mig_start(struct kvm *kvm, struct kvm_cgm_data *data);
 int tdx_mig_get_epoch_token(struct kvm *kvm, struct kvm_cgm_data *data);
 int tdx_mig_set_epoch_token(struct kvm *kvm, struct kvm_cgm_data *data);
+int tdx_mig_get_memory_state(struct kvm *kvm, gfn_t *gfns, uint16_t gfn_num,
+			     struct kvm_cgm_data *data);
 #else
 static inline int tdx_hardware_setup(struct kvm_x86_ops *x86_ops) { return -EOPNOTSUPP; }
 static inline void tdx_hardware_unsetup(void) {}
@@ -290,6 +292,14 @@ static inline int tdx_mig_get_epoch_token(struct kvm *kvm,
 
 static inline int tdx_mig_set_epoch_token(struct kvm *kvm,
 					  struct kvm_cgm_data *data)
+{
+	return -EOPNOTSUPP;
+}
+
+static inline int tdx_mig_get_memory_state(struct kvm *kvm,
+					   gfn_t *gfns,
+					   uint16_t gfn_num,
+					   struct kvm_cgm_data *data)
 {
 	return -EOPNOTSUPP;
 }
