@@ -7835,3 +7835,12 @@ void kvm_mmu_init_memslot_memory_attributes(struct kvm *kvm,
 	}
 }
 #endif
+
+int kvm_mmu_import_private_pages(struct kvm *kvm, struct kvm_cgm_data *data,
+				 struct kvm_import_private_pages *pages)
+{
+	if (!tdp_mmu_enabled)
+		return -EOPNOTSUPP;
+
+	return kvm_tdp_mmu_import_private_pages(kvm, data, pages);
+}
