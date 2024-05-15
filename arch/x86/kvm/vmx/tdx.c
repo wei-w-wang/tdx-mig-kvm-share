@@ -2317,11 +2317,17 @@ static int tdx_handle_ept_violation(struct kvm_vcpu *vcpu)
 		 * TD private pages are always RWX in the SEPT tables,
 		 * i.e. they're always mapped writable.  Just as importantly,
 		 * treating SEPT violations as write faults is necessary to
-		 * avoid COW allocations, which will cause TDAUGPAGE failures
-		 * due to aliasing a single HPA to multiple GPAs.
+		 * avoid COW allocations. For the RWX bits, always treat them
+		 * as write faults. This will cause TDAUGPAGE failures due to
+		 * aliasing a single HPA to multiple GPAs.
+		 *
+		 * For other bits, keep them the same as that reported from the
+		 * TDX module. For example, the fault may be triggered via
+		 * write-blocking the private page, and this is detected from
+		 * the exit_qualification bits returned from the TDX module.
 		 */
-#define TDX_SEPT_VIOLATION_EXIT_QUAL	EPT_VIOLATION_ACC_WRITE
-		exit_qual = TDX_SEPT_VIOLATION_EXIT_QUAL;
+		exit_qual = tdexit_exit_qual(vcpu) & (~VMX_EPT_RWX_MASK);
+		exit_qual |= EPT_VIOLATION_ACC_WRITE;
 	} else {
 		exit_qual = tdexit_exit_qual(vcpu);
 		if (exit_qual & EPT_VIOLATION_ACC_INSTR) {
