@@ -203,7 +203,7 @@ int tdx_mig_set_memory_state(struct kvm *kvm, struct kvm_cgm_data *data,
 			     struct kvm_import_private_pages *pages);
 int tdx_mig_get_vcpu_state(struct kvm_vcpu *vcpu, struct kvm_cgm_data *data);
 int tdx_mig_set_vcpu_state(struct kvm_vcpu *vcpu, struct kvm_cgm_data *data);
-
+int tdx_mig_end(struct kvm *kvm, long abort);
 #else
 static inline int tdx_hardware_setup(struct kvm_x86_ops *x86_ops) { return -EOPNOTSUPP; }
 static inline void tdx_hardware_unsetup(void) {}
