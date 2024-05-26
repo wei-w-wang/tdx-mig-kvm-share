@@ -2374,4 +2374,6 @@ struct kvm_cgm_memory_state {
 	};
 };
 
+#define KVM_CGM_GET_VCPU_STATE _IOWR(KVMIO,  0xdb, struct kvm_cgm_data)
+
 #endif /* __LINUX_KVM_H */
