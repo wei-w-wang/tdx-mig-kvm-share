@@ -73,8 +73,11 @@ struct tdx_mig_mbmd {
  * and destination.
  */
 struct tdx_mig_mbmd_ext {
-	#define TDX_MIG_DRIVER_VERSION	1
-	uint16_t driver_version;
+	union {
+		#define TDX_MIG_DRIVER_VERSION	1
+		uint16_t driver_version;
+		uint16_t nr_pages;
+	};
 };
 
 /*
@@ -214,6 +217,7 @@ struct tdx_mig_state {
 	uint32_t nr_ubuf_pages;
 	uint32_t nr_streams;
 	bool is_src;
+	atomic_t nr_vcpus_migrated;
 	/*
 	 * Array to store physical addresses of the migration stream context
 	 * pages that have been added to the TDX module. The pages can be
@@ -236,6 +240,8 @@ static struct tdx_mig_capabilities tdx_mig_caps;
 
 static void tdx_reclaim_control_page(unsigned long td_page_pa);
 static void tdx_track(struct kvm *kvm);
+static void tdx_add_vcpu_association(struct vcpu_tdx *tdx, int cpu);
+static void tdx_flush_vp_on_cpu(struct kvm_vcpu *vcpu);
 
 static int tdx_mig_capabilities_setup(void)
 {
@@ -1312,6 +1318,157 @@ int tdx_mig_set_memory_state(struct kvm *kvm, struct kvm_cgm_data *data,
 		pr_err("Failed to import page, gfn %llx, err %llx\n",
 			(gfn_t)(pages->gfns[0].gfn), err);
 		return -EIO;
+	}
+
+	return 0;
+}
+
+static int tdx_mig_export_state_vcpu(struct vcpu_tdx *tdx,
+				     struct tdx_mig_stream *stream,
+				     struct kvm_cgm_data *data)
+{
+	uint32_t total_pages =
+		tdx_mig_caps.vcpu_state_pages + TDX_MIG_MBMD_NPAGES;
+	union tdx_mig_stream_info stream_info = {.val = 0};
+	struct tdx_mig_mbmd_ext *mbmd_ext;
+	struct tdx_module_args out;
+	uint16_t nr_pages_exported;
+	uint64_t err;
+	int ret, cpu;
+
+	ret = tdx_mig_stream_state_buffer_init(stream, data->uaddr + data->size,
+					       total_pages);
+	if (ret < 0)
+		return ret;
+
+	tdx_flush_vp_on_cpu(&tdx->vcpu);
+	cpu = get_cpu();
+
+	stream_info.index = stream->idx;
+	do {
+		err = tdh_export_state_vp(tdx->tdvpr_pa,
+					  stream->mbmd.addr_and_size,
+					  stream->page_list.info.val,
+					  stream_info.val,
+					  &out);
+		if (seamcall_masked_status(err) == TDX_INTERRUPTED_RESUMABLE)
+			stream_info.resume = 1;
+	} while (seamcall_masked_status(err) == TDX_INTERRUPTED_RESUMABLE);
+
+	if (err != TDX_SUCCESS) {
+		pr_err("Failed to export vcpu state: %llx\n", err);
+		put_cpu();
+		ret = -EIO;
+		goto out;
+	}
+	tdx_add_vcpu_association(tdx, cpu);
+	tdx->vcpu.cpu = cpu;
+	put_cpu();
+
+	if (PAGE_SIZE - stream->mbmd.data->size <
+				sizeof(struct tdx_mig_mbmd_ext)) {
+		ret = -ENOMEM;
+		goto out;
+	}
+	nr_pages_exported = out.rdx + TDX_MIG_MBMD_NPAGES;
+
+	mbmd_ext = tdx_mig_get_mbmd_ext(stream);
+	mbmd_ext->nr_pages = nr_pages_exported;
+	data->size += nr_pages_exported * PAGE_SIZE;
+
+out:
+	unpin_user_pages(stream->pages, total_pages);
+	return ret;
+}
+
+static int tdx_mig_export_state_td(struct kvm_tdx *kvm_tdx,
+				   struct tdx_mig_stream *stream,
+				   struct kvm_cgm_data *data)
+{
+	uint32_t total_pages =
+		tdx_mig_caps.td_state_pages + TDX_MIG_MBMD_NPAGES;
+	union tdx_mig_stream_info stream_info = {.val = 0};
+	struct tdx_mig_mbmd_ext *mbmd_ext;
+	struct tdx_module_args out;
+	uint16_t nr_pages_exported;
+	uint64_t err;
+	int ret;
+
+	ret = tdx_mig_stream_state_buffer_init(stream, data->uaddr,
+					       total_pages);
+	if (ret)
+		return ret;
+
+	do {
+		err = tdh_export_state_td(kvm_tdx->tdr_pa,
+					  stream->mbmd.addr_and_size,
+					  stream->page_list.info.val,
+					  stream_info.val,
+					  &out);
+		if (seamcall_masked_status(err) == TDX_INTERRUPTED_RESUMABLE)
+			stream_info.resume = 1;
+	} while (seamcall_masked_status(err) == TDX_INTERRUPTED_RESUMABLE);
+
+	if (err != TDX_SUCCESS) {
+		pr_err("Failed to export TD state: %llx\n", err);
+		return -EIO;
+	}
+
+	nr_pages_exported = out.rdx + TDX_MIG_MBMD_NPAGES;
+
+	if (PAGE_SIZE - stream->mbmd.data->size <
+				sizeof(struct tdx_mig_mbmd_ext)) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	mbmd_ext = tdx_mig_get_mbmd_ext(stream);
+	mbmd_ext->nr_pages = nr_pages_exported;
+	data->size += nr_pages_exported * PAGE_SIZE;
+
+out:
+	unpin_user_pages(stream->pages, total_pages);
+	return ret;
+}
+
+static int tdx_mig_export_pause(struct kvm_tdx *kvm_tdx)
+{
+	uint64_t err;
+
+	err = tdh_export_pasue(kvm_tdx->tdr_pa);
+	if (err != TDX_SUCCESS) {
+		pr_err("Failed to pause the TD: %llx\n", err);
+		return -EIO;
+	}
+
+	return 0;
+}
+
+int tdx_mig_get_vcpu_state(struct kvm_vcpu *vcpu, struct kvm_cgm_data *data)
+{
+	struct vcpu_tdx *tdx = to_tdx(vcpu);
+	struct kvm_tdx *kvm_tdx = to_kvm_tdx(vcpu->kvm);
+	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
+	struct tdx_mig_stream *stream = &mig_state->stream;
+	int ret;
+
+	if (!atomic_read(&mig_state->nr_vcpus_migrated)) {
+		ret = tdx_mig_export_pause(kvm_tdx);
+		if (ret)
+			return ret;
+
+		ret = tdx_mig_export_state_td(kvm_tdx, stream, data);
+		if (ret)
+			return ret;
+	}
+
+	ret = tdx_mig_export_state_vcpu(tdx, stream, data);
+	if (ret)
+		return ret;
+
+	if (atomic_inc_return(&mig_state->nr_vcpus_migrated) ==
+	    atomic_read(&vcpu->kvm->online_vcpus)) {
+		tdx_mig_stream_export_track(kvm_tdx, stream, data, true);
 	}
 
 	return 0;
