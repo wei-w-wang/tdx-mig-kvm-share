@@ -6235,6 +6235,24 @@ long kvm_arch_vcpu_ioctl(struct file *filp,
 			goto out;
 		r = kvm_x86_ops.vcpu_mem_enc_ioctl(vcpu, argp);
 		break;
+	case KVM_CGM_GET_VCPU_STATE: {
+		struct kvm_cgm_data data;
+
+		r = -ENOTTY;
+		if (!kvm_x86_ops.cgm_get_vcpu_state)
+			goto out;
+		r = -EFAULT;
+		if (copy_from_user(&data, argp, sizeof(data)))
+			goto out;
+		r = static_call(kvm_x86_cgm_get_vcpu_state)(vcpu, &data);
+		if (r)
+			goto out;
+		r = -EFAULT;
+		if (copy_to_user(argp, &data, sizeof(data)))
+			goto out;
+		r = 0;
+		break;
+	}
 	default:
 		r = -EINVAL;
 	}

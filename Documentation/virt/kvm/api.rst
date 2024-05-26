@@ -6440,6 +6440,23 @@ Userspace places the data into a buffer shared via "struct kvm_cgm_data".
 The @gfn_num variable is used to indicate the number of private pages, the
 data of which is placed within the buffer.
 
+4.149 KVM_CGM_GET_VCPU_STATE
+---------------------------------
+
+:Capability: KVM_CGM_CAP
+:Architectures: x86
+:Type: vcpu ioctl
+:Parameters: struct kvm_cgm_data (in/out)
+:Returns: 0 on success, < 0 on error
+
+KVM_CGM_GET_VCPU_STATE is used by userspace, on the live migration source side,
+to request the secure firmware (e.g. TDX module) via KVM to get vcpu state
+data.
+
+Userspace supplies a list buffers through "struct kvm_cgm_data". The state data
+(usually encrypted by the secure firmware) will be loaded into the buffers,
+with the data size set to "struct kvm_cgm_data" on return of the ioctl.
+
 5. The kvm_run structure
 ========================
 
