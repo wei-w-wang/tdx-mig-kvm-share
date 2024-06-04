@@ -80,26 +80,18 @@ static int tdx_get_capabilities(struct kvm_tdx_cmd *cmd)
 		goto out;
 	}
 
-	*caps = (struct kvm_tdx_capabilities) {
-		.attrs_fixed0 = tdx_info->attributes_fixed0,
-		.attrs_fixed1 = tdx_info->attributes_fixed1,
-		.xfam_fixed0 = tdx_info->xfam_fixed0,
-		.xfam_fixed1 = tdx_info->xfam_fixed1,
-		.supported_gpaw = TDX_CAP_GPAW_48 |
-		((kvm_get_shadow_phys_bits() >= 52 &&
-		  cpu_has_vmx_ept_5levels()) ? TDX_CAP_GPAW_52 : 0),
-		.nr_cpuid_configs = tdx_info->num_cpuid_config,
-		.padding = 0,
-	};
+	caps->supported_attrs = kvm_tdx_caps->supported_attrs;
+	caps->supported_xfam = kvm_tdx_caps->supported_xfam;
+	caps->nr_cpuid_configs = kvm_tdx_caps->num_cpuid_config;
 
 	if (copy_to_user(user_caps, caps, sizeof(*caps))) {
 		ret = -EFAULT;
 		goto out;
 	}
 
-	if (copy_to_user(user_caps->cpuid_configs, &tdx_info->cpuid_configs,
-			 tdx_info->num_cpuid_config *
-			 sizeof(tdx_info->cpuid_configs[0])))
+	if (copy_to_user(user_caps->cpuid_configs, &kvm_tdx_caps->cpuid_configs,
+			 kvm_tdx_caps->num_cpuid_config *
+			 sizeof(kvm_tdx_caps->cpuid_configs[0])))
 		ret = -EFAULT;
 
 out:
