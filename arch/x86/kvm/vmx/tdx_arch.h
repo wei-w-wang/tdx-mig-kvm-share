@@ -177,6 +177,11 @@ struct td_params {
 #define MD_FIELD_ID_FEATURES0_NO_RBP_MOD	BIT_ULL(18)
 #define MD_FIELD_ID_FEATURES0_TOPOLOGY_ENUM	BIT_ULL(20)
 
+/*
+ * TD scope metadata field ID.
+ */
+#define TD_MD_FIELD_ID_CPUID_VALUES		0x9410000300000000ULL
+
 #define TDX_MAX_NR_CPUID_CONFIGS       37
 
 #endif /* __KVM_X86_TDX_ARCH_H */
