@@ -27,6 +27,8 @@ static void __used tdx_guest_keyid_free(int keyid)
 	ida_free(&tdx_guest_keyid_pool, keyid);
 }
 
+#define KVM_TDX_CPUID_NO_SUBLEAF	((__u32)-1)
+
 struct tdx_info {
 	u64 features0;
 	u64 attributes_fixed0;
@@ -41,6 +43,17 @@ struct tdx_info {
 
 /* Info about the TDX module. */
 static struct tdx_info *tdx_info;
+
+struct kvm_tdx_caps {
+	u64 supported_attrs;
+	u64 supported_xfam;
+
+	u16 num_cpuid_config;
+	/* This must the last member. */
+	DECLARE_FLEX_ARRAY(struct kvm_tdx_cpuid_config, cpuid_configs);
+};
+
+static struct kvm_tdx_caps *kvm_tdx_caps;
 
 static int tdx_get_capabilities(struct kvm_tdx_cmd *cmd)
 {
@@ -129,6 +142,43 @@ out:
 	return r;
 }
 
+#define KVM_SUPPORTED_TD_ATTRS (TDX_TD_ATTR_SEPT_VE_DISABLE)
+
+static int __init setup_kvm_tdx_caps(void)
+{
+	struct kvm_tdx_cpuid_config *dest, *source;
+	u64 kvm_supported;
+	int i;
+
+	kvm_tdx_caps = kzalloc(sizeof(*kvm_tdx_caps) +
+			       sizeof(struct kvm_tdx_cpuid_config) * tdx_info->num_cpuid_config + 1,
+			       GFP_KERNEL);
+	if (!kvm_tdx_caps)
+		return -ENOMEM;
+
+	kvm_supported = KVM_SUPPORTED_TD_ATTRS;
+	if (((kvm_supported | tdx_info->attributes_fixed1) & tdx_info->attributes_fixed0) != kvm_supported)
+		return -EIO;
+	kvm_tdx_caps->supported_attrs = kvm_supported;
+
+	kvm_supported = kvm_caps.supported_xcr0 | kvm_caps.supported_xss;
+	if (((kvm_supported | tdx_info->xfam_fixed1) & tdx_info->xfam_fixed0) != kvm_supported)
+		return -EIO;
+	kvm_tdx_caps->supported_xfam = kvm_supported;
+
+	kvm_tdx_caps->num_cpuid_config = tdx_info->num_cpuid_config;
+	for (i = 0; i < tdx_info->num_cpuid_config; i++)
+	{
+		source = &tdx_info->cpuid_configs[i];
+		dest = &kvm_tdx_caps->cpuid_configs[i];
+		memcpy(dest, source, sizeof(struct kvm_tdx_cpuid_config));
+		if (dest->sub_leaf == KVM_TDX_CPUID_NO_SUBLEAF)
+			dest->sub_leaf = 0;
+	}
+
+	return 0;
+}
+
 static int __init tdx_module_setup(void)
 {
 	struct st {
@@ -207,6 +257,10 @@ static int __init tdx_module_setup(void)
 		c->ecx = (u32)cpuid_st.ecx_edx;
 		c->edx = cpuid_st.ecx_edx >> 32;
 	}
+
+	ret = setup_kvm_tdx_caps();
+	if (ret)
+		goto error_out;
 
 	return 0;
 
