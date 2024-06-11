@@ -22,6 +22,13 @@
 struct tdx_mig_state {
 	uint32_t nr_ubuf_pages;
 	uint32_t nr_streams;
+	/*
+	 * Array to store physical addresses of the migration stream context
+	 * pages that have been added to the TDX module. The pages can be
+	 * reclaimed from TDX when TD is torn down.
+	 */
+	hpa_t *migsc_paddrs;
+	hpa_t backward_migsc_paddr;
 };
 
 struct tdx_mig_capabilities {
@@ -32,6 +39,8 @@ struct tdx_mig_capabilities {
 };
 
 static struct tdx_mig_capabilities tdx_mig_caps;
+
+static void tdx_reclaim_control_page(unsigned long td_page_pa);
 
 static int tdx_mig_capabilities_setup(void)
 {
@@ -90,6 +99,7 @@ int tdx_mig_enable_cap(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm)
 static int tdx_mig_state_create(struct kvm_tdx *kvm_tdx)
 {
 	struct tdx_mig_state *mig_state;
+	hpa_t *migsc_paddrs;
 
 	if (kvm_tdx->mig_state) {
 		pr_warn("unexpected: mig_state already created\n");
@@ -100,6 +110,14 @@ static int tdx_mig_state_create(struct kvm_tdx *kvm_tdx)
 	if (!mig_state)
 		return -ENOMEM;
 
+	migsc_paddrs = kcalloc(tdx_mig_caps.max_migs, sizeof(hpa_t),
+			       GFP_KERNEL_ACCOUNT);
+	if (!migsc_paddrs) {
+		kfree(mig_state);
+		return -ENOMEM;
+	}
+
+	mig_state->migsc_paddrs = migsc_paddrs;
 	kvm_tdx->mig_state = mig_state;
 	return 0;
 }
@@ -107,10 +125,22 @@ static int tdx_mig_state_create(struct kvm_tdx *kvm_tdx)
 static void tdx_mig_state_destroy(struct kvm_tdx *kvm_tdx)
 {
 	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
+	uint32_t i;
 
 	if (!mig_state)
 		return;
 
+	if (mig_state->backward_migsc_paddr)
+		tdx_reclaim_control_page(mig_state->backward_migsc_paddr);
+
+	for (i = 0; i < tdx_mig_caps.max_migs; i++) {
+		if (!mig_state->migsc_paddrs[i])
+			break;
+
+		tdx_reclaim_control_page(mig_state->migsc_paddrs[i]);
+	}
+
+	kfree(mig_state->migsc_paddrs);
 	kfree(mig_state);
 	kvm_tdx->mig_state = NULL;
 }
@@ -220,6 +250,56 @@ static int tdx_bind_migtd(struct kvm_tdx *usertd_tdx,
 	return 0;
 }
 
+static int tdx_mig_stream_create(struct kvm_tdx *kvm_tdx, hpa_t *migsc_paddr)
+{
+	unsigned long migsc_va, migsc_pa;
+	uint64_t err;
+
+	/*
+	 * This migration stream has been created, e.g. the previous migration
+	 * session is aborted and the migration stream is retained during the
+	 * TD guest lifecycle (required by the TDX migration architecture)
+	 * for later re-migration). No need to proceed to the creation in this
+	 * case.
+	 */
+	if (*migsc_paddr)
+		return 0;
+
+	migsc_va = __get_free_page(GFP_KERNEL_ACCOUNT);
+	if (!migsc_va)
+		return -ENOMEM;
+	migsc_pa = __pa(migsc_va);
+
+	err = tdh_mig_stream_create(kvm_tdx->tdr_pa, migsc_pa);
+	if (WARN_ON_ONCE(err)) {
+		pr_tdx_error(TDH_MIG_STREAM_CREATE, err, NULL);
+		free_page(migsc_va);
+		return -EIO;
+	}
+
+	*migsc_paddr = migsc_pa;
+
+	return 0;
+}
+
+static int tdx_mig_state_setup(struct kvm_tdx *kvm_tdx)
+{
+	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
+	int i, ret;
+
+	ret = tdx_mig_stream_create(kvm_tdx, &mig_state->backward_migsc_paddr);
+	if (ret)
+		return ret;
+
+	for (i = 0; i < mig_state->nr_streams; i++) {
+		ret = tdx_mig_stream_create(kvm_tdx, &mig_state->migsc_paddrs[i]);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
 int tdx_mig_prepare(struct kvm *kvm, struct kvm_cgm_prepare *prepare)
 {
 	int ret;
@@ -238,5 +318,6 @@ int tdx_mig_prepare(struct kvm *kvm, struct kvm_cgm_prepare *prepare)
 		return ret;
 
 	tdx_notify_migtd(migtd_tdx);
-	return 0;
+
+	return tdx_mig_state_setup(usertd_tdx);
 }
