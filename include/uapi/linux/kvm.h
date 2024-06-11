@@ -1241,6 +1241,7 @@ struct kvm_ppc_resize_hpt {
 #define KVM_CAP_ARM_EAGER_SPLIT_CHUNK_SIZE 228
 #define KVM_CAP_ARM_SUPPORTED_BLOCK_SIZES 229
 #define KVM_CAP_ARM_SUPPORTED_REG_MASK_RANGES 230
+#define KVM_CAP_CGM 231
 /* TODO: remove this workaround to avoid CAP number conflict in the upstream. */
 #define KVM_CAP_MEMORY_ATTRIBUTES 500
 #define KVM_CAP_USER_MEMORY2 750
@@ -2320,6 +2321,14 @@ struct kvm_create_guest_memfd {
 };
 
 #define KVM_GUEST_MEMFD_ALLOW_HUGEPAGE		(1ULL << 0)
+
+#define KVM_CGM_UAPI_VERSION			1
+
+struct kvm_cap_cgm {
+	__u32 nr_ubuf_pages;
+	__u32 nr_threads;
+	__u64 reserved[6];
+};
 
 #define KVM_CGM_PREPARE _IOWR(KVMIO,  0xd5, struct kvm_cgm_prepare)
 

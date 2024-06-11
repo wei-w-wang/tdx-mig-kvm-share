@@ -157,6 +157,7 @@ KVM_X86_OP(vcpu_deliver_sipi_vector)
 KVM_X86_OP(vcpu_deliver_init)
 KVM_X86_OP_OPTIONAL_RET0(vcpu_get_apicv_inhibit_reasons);
 KVM_X86_OP_OPTIONAL(get_untagged_addr)
+KVM_X86_OP_OPTIONAL(cgm_enable_cap)
 KVM_X86_OP_OPTIONAL(cgm_prepare)
 
 #undef KVM_X86_OP

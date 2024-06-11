@@ -1891,6 +1891,7 @@ struct kvm_x86_ops {
 
 	gva_t (*get_untagged_addr)(struct kvm_vcpu *vcpu, gva_t gva, unsigned int flags);
 
+	int (*cgm_enable_cap)(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm);
 	int (*cgm_prepare)(struct kvm *kvm, struct kvm_cgm_prepare *prepare);
 };
 
