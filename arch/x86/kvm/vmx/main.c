@@ -1027,6 +1027,14 @@ static int vt_move_enc_context_from(struct kvm *kvm, unsigned int source_fd)
 	return tdx_vm_move_enc_context_from(kvm, source_fd);
 }
 
+static int vt_cgm_enable_cap(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm)
+{
+	if (!is_td(kvm))
+		return -ENOTTY;
+
+	return tdx_mig_enable_cap(kvm, cap_cgm);
+}
+
 static int vt_cgm_prepare(struct kvm *kvm,
 			  struct kvm_cgm_prepare *prepare)
 {
@@ -1203,6 +1211,7 @@ struct kvm_x86_ops vt_x86_ops __initdata = {
 
 	.vm_move_enc_context_from = vt_move_enc_context_from,
 
+	.cgm_enable_cap = vt_cgm_enable_cap,
 	.cgm_prepare = vt_cgm_prepare,
 };
 

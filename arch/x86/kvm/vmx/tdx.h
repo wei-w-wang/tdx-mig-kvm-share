@@ -65,6 +65,7 @@ struct kvm_tdx {
 	atomic64_t td_pages;
 #endif
 	struct tdx_binding_info *binding_info;
+	struct tdx_mig_state *mig_state;
 };
 
 union tdx_exit_reason {
