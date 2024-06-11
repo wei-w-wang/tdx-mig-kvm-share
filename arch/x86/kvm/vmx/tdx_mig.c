@@ -262,10 +262,60 @@ int tdx_mig_enable_cap(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm)
 	return 0;
 }
 
+static void tdx_mig_gpa_list_init(struct tdx_mig_gpa_list *gpa_list,
+				  gfn_t *gfns, uint32_t num, int operation)
+{
+	uint32_t i;
+
+	memset(gpa_list->entries, 0, PAGE_SIZE);
+	for (i = 0; i < num; i++) {
+		gpa_list->entries[i].gfn = gfns[i];
+		gpa_list->entries[i].operation = operation;
+	}
+
+	gpa_list->info.first_entry = 0;
+	gpa_list->info.last_entry = num - 1;
+}
+
 static int tdx_write_block_private_pages(struct kvm *kvm, gfn_t *gfns,
 					 uint32_t num)
 {
-	return -EOPNOTSUPP;
+	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
+	struct tdx_mig_gpa_list *gpa_list = &kvm_tdx->mig_state->blockw_gpa_list;
+	uint32_t max_num = PAGE_SIZE / sizeof(union tdx_mig_gpa_list_entry);
+	uint32_t start, blockw_num = 0;
+	struct tdx_module_args out;
+	uint64_t err;
+
+	if (!gpa_list->entries) {
+		pr_err("gpa_list not allocated\n");
+		return -EINVAL;
+	}
+
+	for (start = 0; start < num; start += blockw_num) {
+		if (num > max_num)
+			blockw_num = max_num;
+		else
+			blockw_num = num;
+
+		tdx_mig_gpa_list_init(gpa_list, gfns + start, blockw_num,
+				      GPA_LIST_OP_BLOCKW);
+		do {
+			err = tdh_export_blockw(kvm_tdx->tdr_pa,
+						gpa_list->info.val, &out);
+			if (seamcall_masked_status(err) ==
+						TDX_INTERRUPTED_RESUMABLE)
+				gpa_list->info.val = out.rcx;
+		} while (seamcall_masked_status(err) ==
+						TDX_INTERRUPTED_RESUMABLE);
+
+		if (seamcall_masked_status(err) != TDX_SUCCESS) {
+			pr_err("BLOCKW failed %llx\n", err);
+			return -EIO;
+		}
+	}
+
+	return 0;
 }
 
 static int tdx_mig_state_create(struct kvm_tdx *kvm_tdx)
