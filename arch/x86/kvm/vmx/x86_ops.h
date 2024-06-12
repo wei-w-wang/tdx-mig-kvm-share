@@ -199,6 +199,9 @@ int tdx_mig_get_epoch_token(struct kvm *kvm, struct kvm_cgm_data *data);
 int tdx_mig_set_epoch_token(struct kvm *kvm, struct kvm_cgm_data *data);
 int tdx_mig_get_memory_state(struct kvm *kvm, gfn_t *gfns, uint16_t gfn_num,
 			     struct kvm_cgm_data *data);
+int tdx_mig_set_memory_state(struct kvm *kvm, struct kvm_cgm_data *data,
+			     struct kvm_import_private_pages *pages);
+
 #else
 static inline int tdx_hardware_setup(struct kvm_x86_ops *x86_ops) { return -EOPNOTSUPP; }
 static inline void tdx_hardware_unsetup(void) {}
@@ -299,6 +302,12 @@ static inline int tdx_mig_set_epoch_token(struct kvm *kvm,
 static inline int tdx_mig_get_memory_state(struct kvm *kvm,
 					   gfn_t *gfns,
 					   uint16_t gfn_num,
+					   struct kvm_cgm_data *data)
+{
+	return -EOPNOTSUPP;
+}
+
+static inline int tdx_mig_set_memory_state(struct kvm *kvm, uint16_t gfn_num,
 					   struct kvm_cgm_data *data)
 {
 	return -EOPNOTSUPP;
