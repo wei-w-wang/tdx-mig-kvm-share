@@ -4379,6 +4379,7 @@ int __init tdx_hardware_setup(struct kvm_x86_ops *x86_ops)
 	x86_ops->unzap_private_spte = tdx_sept_unzap_private_spte;
 	x86_ops->write_block_private_pages = tdx_write_block_private_pages;
 	x86_ops->write_unblock_private_page = tdx_write_unblock_private_page;
+	x86_ops->restore_private_page = tdx_restore_private_page;
 
 	mce_register_decode_chain(&tdx_mce_nb);
 	return 0;
