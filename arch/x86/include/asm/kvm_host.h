@@ -1827,6 +1827,7 @@ struct kvm_x86_ops {
 					 uint32_t num);
 	int (*write_unblock_private_page)(struct kvm *kvm, gfn_t gfn,
 					  int level);
+	int (*restore_private_page)(struct kvm *kvm, gfn_t gfn);
 
 	bool (*has_wbinvd_exit)(void);
 
