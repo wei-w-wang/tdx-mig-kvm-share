@@ -4,13 +4,20 @@
 #include <linux/kvm_host.h>
 #include <linux/pagemap.h>
 #include <linux/anon_inodes.h>
+#include <linux/hugetlb.h>
 
 #include "kvm_mm.h"
 
 struct kvm_gmem {
 	struct kvm *kvm;
 	struct xarray bindings;
+	u64 flags;
 	struct list_head entry;
+	struct {
+	  		struct hstate *h;
+			struct hugepage_subpool *spool;
+			struct resv_map *resv_map;
+	} hugetlb;
 };
 
 static struct folio *kvm_gmem_get_huge_folio(struct inode *inode, pgoff_t index)
@@ -145,10 +152,14 @@ static long kvm_gmem_punch_hole(struct inode *inode, loff_t offset, loff_t len)
 	filemap_invalidate_lock(inode->i_mapping);
 
 	list_for_each_entry(gmem, gmem_list, entry)
+	{
 		kvm_gmem_invalidate_begin(gmem, start, end);
 
-	truncate_inode_pages_range(inode->i_mapping, offset, offset + len - 1);
-
+		if (gmem->flags & KVM_GUEST_MEMFD_HUGETLB)
+			kvm_gmem_hugetlb_truncate_range(inode, offset, len);
+		else
+			truncate_inode_pages_range(inode->i_mapping, offset, offset + len - 1);
+	}
 	list_for_each_entry(gmem, gmem_list, entry)
 		kvm_gmem_invalidate_end(gmem, start, end);
 
@@ -257,6 +268,18 @@ static int kvm_gmem_release(struct inode *inode, struct file *file)
 	 * memory, as its lifetime is associated with the inode, not the file.
 	 */
 	kvm_gmem_invalidate_begin(gmem, 0, -1ul);
+
+	if (gmem->flags & KVM_GUEST_MEMFD_HUGETLB) {
+        truncate_inode_pages_final_prepare(inode->i_mapping);
+        remove_mapping_hugepages(
+            inode->i_mapping, gmem->hugetlb.h, gmem->hugetlb.spool,
+            gmem->hugetlb.resv_map, inode, 0, LLONG_MAX);
+        resv_map_release(&gmem->hugetlb.resv_map->refs);
+        hugepage_put_subpool(gmem->hugetlb.spool);
+	} else {
+        	truncate_inode_pages_final(inode->i_mapping);
+	}
+
 	kvm_gmem_invalidate_end(gmem, 0, -1ul);
 
 	list_del(&gmem->entry);
@@ -366,6 +389,47 @@ static const struct inode_operations kvm_gmem_iops = {
 	.setattr	= kvm_gmem_setattr,
 };
 
+static int kvm_gmem_hugetlb_setup(struct inode *inode, struct kvm_gmem *gmem,
+                                 loff_t size, u64 flags)
+{
+       int page_size_log;
+       int hstate_idx;
+       long hpages;
+       struct resv_map *resv_map;
+       struct hugepage_subpool *spool;
+       struct hstate *h;
+
+       page_size_log = (flags >> KVM_GUEST_MEMFD_HUGE_SHIFT) & KVM_GUEST_MEMFD_HUGE_MASK;
+       hstate_idx = get_hstate_idx(page_size_log);
+       if (hstate_idx < 0)
+               return -ENOENT;
+
+       h = &hstates[hstate_idx];
+       /* Round up to accommodate size requests that don't align with huge pages */
+       hpages = round_up(size, huge_page_size(h)) >> huge_page_shift(h);
+       spool = hugepage_new_subpool(h, hpages, hpages);
+       if (!spool)
+               goto out;
+
+       resv_map = resv_map_alloc();
+       if (!resv_map)
+               goto out_subpool;
+
+       inode->i_blkbits = huge_page_shift(h);
+
+       gmem->hugetlb.h = h;
+       gmem->hugetlb.spool = spool;
+       gmem->hugetlb.resv_map = resv_map;
+       return 0;
+
+out_subpool:
+       kfree(spool);
+out:
+       return -ENOMEM;
+}
+
+#define KVM_GUEST_MEMFD_ALL_FLAGS (KVM_GUEST_MEMFD_HUGE_PMD | KVM_GUEST_MEMFD_HUGETLB)
+
 static int __kvm_gmem_create(struct kvm *kvm, loff_t size, u64 flags)
 {
 	const char *anon_name = "[kvm-gmem]";
@@ -406,6 +470,12 @@ static int __kvm_gmem_create(struct kvm *kvm, loff_t size, u64 flags)
 	mapping_set_unmovable(inode->i_mapping);
 	/* Unmovable mappings are supposed to be marked unevictable as well. */
 	WARN_ON_ONCE(!mapping_unevictable(inode->i_mapping));
+
+	if (flags & KVM_GUEST_MEMFD_HUGETLB) {
+		err = kvm_gmem_hugetlb_setup(inode, gmem, size, flags);
+		if (err)
+			goto err_gmem;
+	}
 
 	kvm_get_kvm(kvm);
 	gmem->kvm = kvm;
