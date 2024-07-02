@@ -81,15 +81,15 @@ enum cc_attr {
 	 */
 	CC_ATTR_GUEST_SEV_SNP,
 
-	/**
-	 * @CC_ATTR_HOTPLUG_DISABLED: Hotplug is not supported or disabled.
+	/*
+	 * @CC_ATTR_GUEST_SECURE_TIME: Use secured TSC and disable kvmclock.
 	 *
-	 * The platform/OS is running as a guest/virtual machine does not
-	 * support CPU hotplug feature.
+	 * The platform/OS is running as a guest/virtual machine and use
+	 * secured TSC and disable kvmclock.
 	 *
-	 * Examples include TDX Guest.
+	 * Examples include TDX guest.
 	 */
-	CC_ATTR_HOTPLUG_DISABLED,
+	CC_ATTR_GUEST_SECURE_TIME,
 };
 
 #ifdef CONFIG_ARCH_HAS_CC_PLATFORM
