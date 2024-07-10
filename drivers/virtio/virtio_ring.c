@@ -294,6 +294,9 @@ static bool vring_use_dma_api(const struct virtio_device *vdev)
 	if (xen_domain())
 		return true;
 
+	if (cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT))
+		return true;
+
 	return false;
 }
 

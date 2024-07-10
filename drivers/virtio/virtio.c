@@ -174,7 +174,7 @@ static int virtio_features_ok(struct virtio_device *dev)
 
 	might_sleep();
 
-	if (virtio_check_mem_acc_cb(dev)) {
+	if (virtio_check_mem_acc_cb(dev) && !cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT)) {
 		if (!virtio_has_feature(dev, VIRTIO_F_VERSION_1)) {
 			dev_warn(&dev->dev,
 				 "device must provide VIRTIO_F_VERSION_1\n");
