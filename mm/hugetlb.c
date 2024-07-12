@@ -52,7 +52,10 @@
 
 int hugetlb_max_hstate __read_mostly;
 unsigned int default_hstate_idx;
+EXPORT_SYMBOL_GPL(default_hstate_idx);
+
 struct hstate hstates[HUGE_MAX_HSTATE];
+EXPORT_SYMBOL_GPL(hstates);
 
 #ifdef CONFIG_CMA
 static struct cma *hugetlb_cma[MAX_NUMNODES];
@@ -91,6 +94,7 @@ DEFINE_SPINLOCK(hugetlb_lock);
  */
 static int num_fault_mutexes;
 struct mutex *hugetlb_fault_mutex_table ____cacheline_aligned_in_smp;
+EXPORT_SYMBOL_GPL(hugetlb_fault_mutex_table);
 
 /* Forward declaration */
 static int hugetlb_acct_memory(struct hstate *h, long delta,
@@ -153,6 +157,7 @@ struct hugepage_subpool *hugepage_new_subpool(struct hstate *h, long max_hpages,
 
 	return spool;
 }
+EXPORT_SYMBOL_GPL(hugepage_new_subpool);
 
 void hugepage_put_subpool(struct hugepage_subpool *spool)
 {
@@ -163,6 +168,7 @@ void hugepage_put_subpool(struct hugepage_subpool *spool)
 	spool->count--;
 	unlock_or_release_subpool(spool, flags);
 }
+EXPORT_SYMBOL_GPL(hugepage_put_subpool);
 
 /*
  * Subpool accounting for allocating and reserving pages.
@@ -1119,6 +1125,7 @@ struct resv_map *resv_map_alloc(void)
 
 	return resv_map;
 }
+EXPORT_SYMBOL_GPL(resv_map_alloc);
 
 void resv_map_release(struct kref *ref)
 {
@@ -1139,6 +1146,7 @@ void resv_map_release(struct kref *ref)
 
 	kfree(resv_map);
 }
+EXPORT_SYMBOL_GPL(resv_map_release);
 
 static struct resv_map *vma_resv_map(struct vm_area_struct *vma)
 {
@@ -1878,6 +1886,7 @@ struct hstate *size_to_hstate(unsigned long size)
 	}
 	return NULL;
 }
+EXPORT_SYMBOL_GPL(size_to_hstate);
 
 void free_huge_folio(struct folio *folio)
 {
@@ -2982,6 +2991,7 @@ void restore_reserve_on_error(struct resv_map *resv, pgoff_t resv_index,
 			 resv_map_end_reservation(resv, resv_index, may_share);
 	}
 }
+EXPORT_SYMBOL_GPL(restore_reserve_on_error);
 
 void restore_reserve_on_error_vma(struct hstate *h, struct vm_area_struct *vma,
 				  unsigned long address, struct folio *folio)
@@ -3291,6 +3301,7 @@ out_end_reservation:
 	mem_cgroup_put(memcg);
 	return ERR_PTR(-ENOSPC);
 }
+EXPORT_SYMBOL_GPL(alloc_hugetlb_folio_from_subpool);
 
 static void *__init __alloc_bootmem_huge_page_inner(phys_addr_t size,
 						    phys_addr_t align,
@@ -6007,6 +6018,7 @@ int hugetlb_filemap_add_folio(struct address_space *mapping, struct hstate *h,
 	spin_unlock(&inode->i_lock);
 	return 0;
 }
+EXPORT_SYMBOL_GPL(hugetlb_filemap_add_folio);
 
 int hugetlb_add_to_page_cache(struct folio *folio, struct address_space *mapping,
 			      pgoff_t idx)
@@ -6295,6 +6307,8 @@ u32 hugetlb_fault_mutex_hash(struct address_space *mapping, pgoff_t idx)
 
 	return hash & (num_fault_mutexes - 1);
 }
+EXPORT_SYMBOL_GPL(hugetlb_fault_mutex_hash);
+
 #else
 /*
  * For uniprocessor systems we always use a single mutex, so just
@@ -7624,6 +7638,7 @@ void hugetlb_zero_partial_page(struct hstate *h,
 	folio_unlock(folio);
 	folio_put(folio);
 }
+EXPORT_SYMBOL_GPL(hugetlb_zero_partial_page);
 
 #ifdef CONFIG_CMA
 static bool cma_reserve_called __initdata;
