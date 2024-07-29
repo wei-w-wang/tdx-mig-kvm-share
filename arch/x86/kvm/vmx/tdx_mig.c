@@ -1648,6 +1648,7 @@ int tdx_mig_end(struct kvm *kvm, long abort)
 			pr_err("Failed to end TD migration: %llx\n", err);
 			return -EIO;
 		}
+		kvm_tdx->finalized = true;
 	}
 
 	mig_state->started = false;
