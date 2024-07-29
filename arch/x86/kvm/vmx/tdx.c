@@ -810,6 +810,8 @@ void tdx_vcpu_free(struct kvm_vcpu *vcpu)
 		tdx_reclaim_control_page(tdx->tdvpr_pa);
 		tdx->tdvpr_pa = 0;
 	}
+
+	tdx->initialized = false;
 }
 
 void tdx_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
