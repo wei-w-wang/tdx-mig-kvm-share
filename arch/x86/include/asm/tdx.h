@@ -27,8 +27,23 @@
 /*
  * TDX module SEAMCALL leaf function error codes
  */
-#define TDX_SUCCESS		0ULL
-#define TDX_RND_NO_ENTROPY	0x8000020300000000ULL
+#define TDX_SUCCESS			0ULL
+#define TDX_INTERRUPTED_RESUMABLE	0x8000000300000000ULL
+#define TDX_RND_NO_ENTROPY		0x8000020300000000ULL
+#define TDX_VCPU_ASSOCIATED		0x8000070100000000ULL
+#define TDX_VCPU_NOT_ASSOCIATED		0x8000070200000000ULL
+
+#define TDX_NON_RECOVERABLE_BIT		62
+/*
+ * Error with the non-recoverable bit cleared indicates that the error is
+ * likely recoverable (e.g. due to lock busy in TDX module), and the seamcall
+ * can be retried.
+ */
+#define TDX_SEAMCALL_ERR_RECOVERABLE(err) \
+	(err >> TDX_NON_RECOVERABLE_BIT == 0x2)
+
+/* The max number of seamcall retries */
+#define TDX_SEAMCALL_RETRY_MAX	10000
 
 #ifndef __ASSEMBLY__
 
@@ -98,19 +113,34 @@ u64 __seamcall_ret(u64 fn, struct tdx_module_args *args);
 u64 __seamcall_saved_ret(u64 fn, struct tdx_module_args *args);
 void tdx_init(void);
 
-#include <asm/archrandom.h>
-
 typedef u64 (*sc_func_t)(u64 fn, struct tdx_module_args *args);
 
 static inline u64 sc_retry(sc_func_t func, u64 fn,
 			   struct tdx_module_args *args)
 {
-	int retry = RDRAND_RETRY_LOOPS;
+	int retry = TDX_SEAMCALL_RETRY_MAX;
+	struct tdx_module_args args_cache;
 	u64 ret;
 
 	do {
+		/*
+		 * Cache the input args for the seamcalls that have output
+		 * params, as they would overwrite the input args.
+		 */
+		if (func != __seamcall) {
+			if (retry == TDX_SEAMCALL_RETRY_MAX)
+				args_cache = *args;
+			else
+				*args = args_cache;
+		}
+
 		ret = func(fn, args);
-	} while (ret == TDX_RND_NO_ENTROPY && --retry);
+		if (!ret ||
+		    ret == TDX_VCPU_ASSOCIATED ||
+		    ret == TDX_VCPU_NOT_ASSOCIATED ||
+		    ret == TDX_INTERRUPTED_RESUMABLE)
+			return ret;
+	} while (TDX_SEAMCALL_ERR_RECOVERABLE(ret) && --retry);
 
 	return ret;
 }
