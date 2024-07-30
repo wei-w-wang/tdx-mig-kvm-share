@@ -1530,6 +1530,9 @@ static int tdx_sept_drop_private_spte(struct kvm *kvm, gfn_t gfn,
 		return 0;
 	}
 
+        if (!kvm_tdx->td_initialized)
+                return 0;
+
 	/*
 	 * When zapping private page, write lock is held. So no race
 	 * condition with other vcpu sept operation.  Race only with
@@ -1596,7 +1599,7 @@ static int tdx_sept_zap_private_spte(struct kvm *kvm, gfn_t gfn,
 	u64 err, entry, level_state;
 
 	/* This can be called when destructing guest TD after freeing HKID. */
-	if (unlikely(!is_hkid_assigned(kvm_tdx)))
+	if (unlikely(!is_hkid_assigned(kvm_tdx) || !kvm_tdx->td_initialized))
 		return 0;
 
 	/* For now large page isn't supported yet. */
@@ -1609,6 +1612,17 @@ static int tdx_sept_zap_private_spte(struct kvm *kvm, gfn_t gfn,
 		pr_tdx_error_2(TDH_MEM_RANGE_BLOCK, err, entry, level_state);
 		return -EIO;
 	}
+
+	/*
+	 * TDX requires TLB tracking before dropping private page.  Do
+	 * it here, although it is also done later.
+	 * If hkid isn't assigned, the guest is destroying and no vcpu
+	 * runs further.  TLB shootdown isn't needed.
+	 *
+	 * TODO: Call TDH.MEM.TRACK() only when we have called
+	 * TDH.MEM.RANGE.BLOCK(), but not call TDH.MEM.TRACK() yet.
+	 */
+	tdx_track(kvm);
 	return 0;
 }
 
@@ -1722,18 +1736,6 @@ static int tdx_sept_remove_private_spte(struct kvm *kvm, gfn_t gfn,
 	ret = tdx_sept_zap_private_spte(kvm, gfn, level);
 	if (ret)
 		return ret;
-
-	/*
-	 * TDX requires TLB tracking before dropping private page.  Do
-	 * it here, although it is also done later.
-	 * If hkid isn't assigned, the guest is destroying and no vcpu
-	 * runs further.  TLB shootdown isn't needed.
-	 *
-	 * TODO: Call TDH.MEM.TRACK() only when we have called
-	 * TDH.MEM.RANGE.BLOCK(), but not call TDH.MEM.TRACK() yet.
-	 */
-	if (is_hkid_assigned(to_kvm_tdx(kvm)))
-		tdx_track(kvm);
 
 	return tdx_sept_drop_private_spte(kvm, gfn, level, pfn);
 }
