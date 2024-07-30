@@ -37,40 +37,6 @@ static inline int pg_level_to_tdx_sept_level(enum pg_level level)
 	return level - 1;
 }
 
-/*
- * TDX module acquires its internal lock for resources.  It doesn't spin to get
- * locks because of its restrictions of allowed execution time.  Instead, it
- * returns TDX_OPERAND_BUSY with an operand id.
- *
- * Multiple VCPUs can operate on SEPT.  Also with zero-step attack mitigation,
- * TDH.VP.ENTER may rarely acquire SEPT lock and release it when zero-step
- * attack is suspected.  It results in TDX_OPERAND_BUSY | TDX_OPERAND_ID_SEPT
- * with TDH.MEM.* operation.  Note: TDH.MEM.TRACK is an exception.
- *
- * Because TDP MMU uses read lock for scalability, spin lock around SEAMCALL
- * spoils TDP MMU effort.  Retry several times with the assumption that SEPT
- * lock contention is rare.  But don't loop forever to avoid lockup.  Let TDP
- * MMU retry.
- */
-#define TDX_ERROR_SEPT_BUSY    (TDX_OPERAND_BUSY | TDX_OPERAND_ID_SEPT)
-
-static inline u64 tdx_seamcall_sept(u64 op, struct tdx_module_args *in)
-{
-#define SEAMCALL_RETRY_MAX     16
-	struct tdx_module_args args_in;
-	int retry = SEAMCALL_RETRY_MAX;
-	u64 ret;
-
-	do {
-		args_in = *in;
-		ret = seamcall_ret(op, in);
-	} while (ret == TDX_ERROR_SEPT_BUSY && retry-- > 0);
-
-	*in = args_in;
-
-	return ret;
-}
-
 static inline u64 tdh_mng_addcx(struct kvm_tdx *kvm_tdx, hpa_t addr)
 {
 	struct tdx_module_args in = {
@@ -95,7 +61,7 @@ static inline u64 tdh_mem_page_add(struct kvm_tdx *kvm_tdx, gpa_t gpa,
 	u64 ret;
 
 	clflush_cache_range(__va(hpa), PAGE_SIZE);
-	ret = tdx_seamcall_sept(TDH_MEM_PAGE_ADD, &in);
+	ret = seamcall_ret(TDH_MEM_PAGE_ADD, &in);
 
 	*rcx = in.rcx;
 	*rdx = in.rdx;
@@ -116,7 +82,7 @@ static inline u64 tdh_mem_sept_add(struct kvm_tdx *kvm_tdx, gpa_t gpa,
 
 	clflush_cache_range(__va(page), PAGE_SIZE);
 
-	ret = tdx_seamcall_sept(TDH_MEM_SEPT_ADD, &in);
+	ret = seamcall_ret(TDH_MEM_SEPT_ADD, &in);
 
 	*rcx = in.rcx;
 	*rdx = in.rdx;
@@ -133,7 +99,7 @@ static inline u64 tdh_mem_sept_remove(struct kvm_tdx *kvm_tdx, gpa_t gpa,
 	};
 	u64 ret;
 
-	ret = tdx_seamcall_sept(TDH_MEM_SEPT_REMOVE, &in);
+	ret = seamcall_ret(TDH_MEM_SEPT_REMOVE, &in);
 
 	*rcx = in.rcx;
 	*rdx = in.rdx;
@@ -163,7 +129,7 @@ static inline u64 tdh_mem_page_aug(struct kvm_tdx *kvm_tdx, gpa_t gpa, hpa_t hpa
 	u64 ret;
 
 	clflush_cache_range(__va(hpa), PAGE_SIZE);
-	ret = tdx_seamcall_sept(TDH_MEM_PAGE_AUG, &in);
+	ret = seamcall_ret(TDH_MEM_PAGE_AUG, &in);
 
 	*rcx = in.rcx;
 	*rdx = in.rdx;
@@ -180,7 +146,7 @@ static inline u64 tdh_mem_range_block(struct kvm_tdx *kvm_tdx, gpa_t gpa,
 	};
 	u64 ret;
 
-	ret = tdx_seamcall_sept(TDH_MEM_RANGE_BLOCK, &in);
+	ret = seamcall_ret(TDH_MEM_RANGE_BLOCK, &in);
 
 	*rcx = in.rcx;
 	*rdx = in.rdx;
@@ -375,7 +341,7 @@ static inline u64 tdh_mem_page_remove(struct kvm_tdx *kvm_tdx, gpa_t gpa,
 	};
 	u64 ret;
 
-	ret = tdx_seamcall_sept(TDH_MEM_PAGE_REMOVE, &in);
+	ret = seamcall_ret(TDH_MEM_PAGE_REMOVE, &in);
 
 	*rcx = in.rcx;
 	*rdx = in.rdx;
@@ -401,7 +367,7 @@ static inline u64 tdh_mem_range_unblock(struct kvm_tdx *kvm_tdx, gpa_t gpa,
 	};
 	u64 ret;
 
-	ret = tdx_seamcall_sept(TDH_MEM_RANGE_UNBLOCK, &in);
+	ret = seamcall_ret(TDH_MEM_RANGE_UNBLOCK, &in);
 
 	*rcx = in.rcx;
 	*rdx = in.rdx;
