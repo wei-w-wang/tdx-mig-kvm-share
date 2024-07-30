@@ -259,19 +259,7 @@ static void tdx_clear_page(unsigned long page_pa)
 
 static u64 ____tdx_reclaim_page(hpa_t pa, u64 *rcx, u64 *rdx, u64 *r8)
 {
-	u64 err;
-
-	do {
-		err = tdh_phymem_page_reclaim(pa, rcx, rdx, r8);
-		/*
-		 * TDH.PHYMEM.PAGE.RECLAIM is allowed only when TD is shutdown.
-		 * state.  i.e. destructing TD.
-		 * TDH.PHYMEM.PAGE.RECLAIM requires TDR and target page.
-		 * Because we're destructing TD, it's rare to contend with TDR.
-		 */
-	} while (unlikely(err == (TDX_OPERAND_BUSY | TDX_OPERAND_ID_RCX) ||
-			  err == (TDX_OPERAND_BUSY | TDX_OPERAND_ID_TDR)));
-	return err;
+	return tdh_phymem_page_reclaim(pa, rcx, rdx, r8);
 }
 
 static int __tdx_reclaim_page(hpa_t pa)
@@ -402,10 +390,7 @@ static void tdx_do_tdh_phymem_cache_wb(void *unused)
 {
 	u64 err = 0;
 
-	do {
-		err = tdh_phymem_cache_wb(!!err);
-	} while (err == TDX_INTERRUPTED_RESUMABLE);
-
+	err = tdh_phymem_cache_wb(!!err);
 	/* Other thread may have done for us. */
 	if (err == TDX_NO_HKID_READY_TO_WBCACHE)
 		err = TDX_SUCCESS;
@@ -456,10 +441,6 @@ static int __tdx_mmu_release_hkid(struct kvm *kvm)
 	write_lock(&kvm->mmu_lock);
 
 	err = tdh_mng_vpflushdone(kvm_tdx);
-	if (err == TDX_FLUSHVP_NOT_DONE) {
-		ret = -EBUSY;
-		goto out;
-	}
 	if (WARN_ON_ONCE(err)) {
 		pr_tdx_error(TDH_MNG_VPFLUSHDONE, err);
 		pr_err("tdh_mng_vpflushdone() failed. HKID %d is leaked.\n",
@@ -505,8 +486,7 @@ out:
 
 void tdx_mmu_release_hkid(struct kvm *kvm)
 {
-	while (__tdx_mmu_release_hkid(kvm) == -EBUSY)
-		;
+	__tdx_mmu_release_hkid(kvm);
 }
 
 void tdx_vm_free(struct kvm *kvm)
@@ -558,16 +538,7 @@ static int tdx_do_tdh_mng_key_config(void *param)
 	struct kvm_tdx *kvm_tdx = param;
 	u64 err;
 
-	do {
-		err = tdh_mng_key_config(kvm_tdx);
-
-		/*
-		 * If it failed to generate a random key, retry it because this
-		 * is typically caused by an entropy error of the CPU's random
-		 * number generator.
-		 */
-	} while (err == TDX_KEY_GENERATION_FAILED);
-
+	err = tdh_mng_key_config(kvm_tdx);
 	if (KVM_BUG_ON(err, &kvm_tdx->kvm)) {
 		pr_tdx_error(TDH_MNG_KEY_CONFIG, err);
 		return -EIO;
@@ -1561,14 +1532,7 @@ static int tdx_sept_drop_private_spte(struct kvm *kvm, gfn_t gfn,
 	}
 
 	hpa_with_hkid = set_hkid_to_hpa(hpa, (u16)kvm_tdx->hkid);
-	do {
-		/*
-		 * TDX_OPERAND_BUSY can happen on locking PAMT entry.  Because
-		 * this page was removed above, other thread shouldn't be
-		 * repeatedly operating on this page.  Just retry loop.
-		 */
-		err = tdh_phymem_page_wbinvd(hpa_with_hkid);
-	} while (unlikely(err == (TDX_OPERAND_BUSY | TDX_OPERAND_ID_RCX)));
+	err = tdh_phymem_page_wbinvd(hpa_with_hkid);
 	if (KVM_BUG_ON(err, kvm)) {
 		pr_tdx_error(TDH_PHYMEM_PAGE_WBINVD, err);
 		return -EIO;
@@ -1683,10 +1647,7 @@ static void tdx_track(struct kvm *kvm)
 	 */
 	kvm_make_all_cpus_request(kvm, KVM_REQ_TLB_FLUSH);
 
-	do {
-		err = tdh_mem_track(kvm_tdx);
-	} while (unlikely(seamcall_masked_status(err) == TDX_OPERAND_BUSY));
-
+	err = tdh_mem_track(kvm_tdx);
 	/* Release remote vcpu waiting for TDH.MEM.TRACK in tdx_flush_tlb(). */
 	atomic_dec(&kvm_tdx->tdh_mem_track);
 
@@ -1808,13 +1769,6 @@ static int tdx_handle_ept_misconfig(struct kvm_vcpu *vcpu)
 int tdx_handle_exit(struct kvm_vcpu *vcpu, fastpath_t fastpath)
 {
 	union tdx_exit_reason exit_reason = to_tdx(vcpu)->exit_reason;
-
-	/*
-	 * TDH.VP.ENTER checks TD EPOCH which contend with TDH.MEM.TRACK and
-	 * vcpu TDH.VP.ENTER.
-	 */
-	if (unlikely(exit_reason.full == (TDX_OPERAND_BUSY | TDX_OPERAND_ID_TD_EPOCH)))
-		return 1;
 
 	if (unlikely(exit_reason.full == TDX_SEAMCALL_UD)) {
 		kvm_spurious_fault();
@@ -2310,11 +2264,6 @@ static int __tdx_td_init(struct kvm *kvm, struct td_params *td_params,
 	kvm_tdx->tdr_pa = tdr_pa;
 	err = tdh_mng_create(kvm_tdx, kvm_tdx->hkid);
 	mutex_unlock(&tdx_lock);
-	if (err == TDX_RND_NO_ENTROPY) {
-		kvm_tdx->tdr_pa = 0;
-		ret = -EAGAIN;
-		goto free_packages;
-	}
 	if (WARN_ON_ONCE(err)) {
 		kvm_tdx->tdr_pa = 0;
 		pr_tdx_error(TDH_MNG_CREATE, err);
@@ -2352,11 +2301,6 @@ static int __tdx_td_init(struct kvm *kvm, struct td_params *td_params,
 	kvm_tdx->tdcs_pa = tdcs_pa;
 	for (i = 0; i < tdx_info->nr_tdcs_pages; i++) {
 		err = tdh_mng_addcx(kvm_tdx, tdcs_pa[i]);
-		if (err == TDX_RND_NO_ENTROPY) {
-			/* Here it's hard to allow userspace to retry. */
-			ret = -EBUSY;
-			goto teardown;
-		}
 		if (WARN_ON_ONCE(err)) {
 			pr_tdx_error(TDH_MNG_ADDCX, err);
 			ret = -EIO;
@@ -2617,8 +2561,6 @@ static int tdx_td_finalizemr(struct kvm *kvm, struct kvm_tdx_cmd *cmd)
 		return -EINVAL;
 
 	cmd->hw_error = tdh_mr_finalize(kvm_tdx);
-	if (seamcall_masked_status(cmd->hw_error) == TDX_OPERAND_BUSY)
-		return -EAGAIN;
 	if (KVM_BUG_ON(cmd->hw_error, kvm)) {
 		pr_tdx_error(TDH_MR_FINALIZE, cmd->hw_error);
 		return -EIO;
