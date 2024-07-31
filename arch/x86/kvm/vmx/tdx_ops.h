@@ -417,4 +417,49 @@ static __always_inline u64 td_tdcs_exec_read64(struct kvm_tdx *kvm_tdx, u32 fiel
 	return data;
 }
 
+static inline u64 tdh_servtd_bind(hpa_t servtd_tdr, hpa_t target_tdr,
+				  u64 slot_idx, u64 attr, u64 type, u64 *rcx,
+				  u64 *r10, u64 *r11, u64 *r12, u64 *r13)
+{
+	struct tdx_module_args in = {
+		.rcx = target_tdr,
+		.rdx = servtd_tdr,
+		.r8 = slot_idx,
+		.r9 = type,
+		.r10 = attr,
+	};
+	u64 ret;
+
+	ret = seamcall_saved_ret(TDH_SERVTD_BIND, &in);
+
+	*rcx = in.rcx;
+	*r10 = in.r10;
+	*r11 = in.r11;
+	*r12 = in.r12;
+	*r13 = in.r13;
+
+	return ret;
+}
+
+enum kvm_tdx_servtd_type {
+	KVM_TDX_SERVTD_TYPE_MIGTD = 0,
+
+	KVM_TDX_SERVTD_TYPE_MAX,
+};
+
+static inline u64 tdh_servtd_prebind(hpa_t target_tdr, hpa_t hash_addr,
+				     u64 slot_idx, u64 attr,
+				     enum kvm_tdx_servtd_type type)
+{
+	struct tdx_module_args in = {
+		.rcx = target_tdr,
+		.rdx = hash_addr,
+		.r8 = slot_idx,
+		.r9 = type,
+		.r10 = attr,
+	};
+
+	return seamcall(TDH_SERVTD_PREBIND, &in);
+}
+
 #endif /* __KVM_X86_TDX_OPS_H */
