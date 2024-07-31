@@ -19,6 +19,8 @@
 #include <trace/events/kvm.h>
 #include "trace.h"
 
+#include "tdx_mig.c"
+
 #undef pr_fmt
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
@@ -2552,6 +2554,9 @@ static int tdx_td_init(struct kvm *kvm, struct kvm_tdx_cmd *cmd)
 	else
 		kvm->arch.gfn_direct_bits = gpa_to_gfn(BIT_ULL(47));
 
+	if (kvm_tdx->attributes & TDX_TD_ATTRIBUTE_MIG)
+		ret = tdx_mig_prebind_migtd(kvm_tdx,
+					    (void *)init_vm->migtd_hash);
 out:
 	/* kfree() accepts NULL. */
 	kfree(init_vm);
@@ -3216,7 +3221,8 @@ int tdx_gmem_private_max_mapping_level(struct kvm *kvm, kvm_pfn_t pfn)
 	return PG_LEVEL_4K;
 }
 
-#define KVM_SUPPORTED_TD_ATTRS (TDX_TD_ATTR_SEPT_VE_DISABLE)
+#define KVM_SUPPORTED_TD_ATTRS (TDX_TD_ATTR_SEPT_VE_DISABLE | \
+				TDX_TD_ATTRIBUTE_MIG)
 
 static int __init setup_kvm_tdx_caps(void)
 {
