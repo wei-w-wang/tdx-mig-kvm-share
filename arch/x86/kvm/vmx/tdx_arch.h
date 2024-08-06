@@ -42,6 +42,8 @@
 #define TDH_VP_WR			43
 #define TDH_SERVTD_BIND			48
 #define TDH_SERVTD_PREBIND		49
+#define TDH_EXPORT_STATE_IMMUTABLE	72
+#define TDH_IMPORT_STATE_IMMUTABLE	85
 #define TDH_MIG_STREAM_CREATE		96
 
 /* TDX control structure (TDR/TDCS/TDVPS) field access codes */
