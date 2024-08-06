@@ -513,4 +513,33 @@ static inline u64 tdh_import_state_immutable(hpa_t tdr,
 	return ret;
 }
 
+static inline u64 tdh_export_blockw(hpa_t tdr, u64 gpa_list_info, u64 *rcx)
+{
+	struct tdx_module_args in = {
+		.rcx = gpa_list_info,
+		.rdx = tdr,
+	};
+	u64 ret;
+
+	ret = seamcall_ret(TDH_EXPORT_BLOCKW, &in);
+	*rcx = in.rcx;
+
+	return ret;
+}
+
+static inline u64 tdh_export_unblockw(hpa_t tdr, u64 ept_info, u64 *rcx, u64 *rdx)
+{
+	struct tdx_module_args in = {
+		.rcx = ept_info,
+		.rdx = tdr,
+	};
+	u64 ret;
+
+	ret = seamcall_ret(TDH_EXPORT_UNBLOCKW, &in);
+	*rcx = in.rcx;
+	*rdx = in.rdx;
+
+	return ret;
+}
+
 #endif /* __KVM_X86_TDX_OPS_H */
