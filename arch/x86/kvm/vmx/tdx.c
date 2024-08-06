@@ -3040,7 +3040,7 @@ static int tdx_gmem_post_populate(struct kvm *kvm, gfn_t gfn, kvm_pfn_t pfn,
 		goto out_put_page;
 	}
 
-	ret = kvm_tdp_map_page(vcpu, gpa, error_code, &level);
+	ret = kvm_tdp_map_page(vcpu, gpa, error_code, &level, false);
 	if (ret < 0)
 		goto out_put_page;
 
