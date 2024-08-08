@@ -3920,6 +3920,7 @@ int __init tdx_hardware_setup(struct kvm_x86_ops *x86_ops)
 	x86_ops->set_external_spte = tdx_sept_set_private_spte;
 	x86_ops->remove_external_spte = tdx_sept_remove_private_spte;
 	x86_ops->write_block_private_pages = tdx_write_block_private_pages;
+	x86_ops->write_unblock_private_page = tdx_write_unblock_private_page;
 
 	return 0;
 
