@@ -1711,4 +1711,6 @@ struct kvm_cgm_data {
 
 #define KVM_CGM_GET_EPOCH_TOKEN _IOWR(KVMIO,  0xd8, struct kvm_cgm_data)
 
+#define KVM_CGM_SET_EPOCH_TOKEN _IOWR(KVMIO,  0xd9, struct kvm_cgm_data)
+
 #endif /* __LINUX_KVM_H */
