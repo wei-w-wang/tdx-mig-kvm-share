@@ -566,4 +566,13 @@ static inline u64 tdh_import_track(hpa_t tdr, u64 mbmd_info,
 	return seamcall(TDH_IMPORT_TRACK, &in);
 }
 
+static inline u64 tdh_import_commit(hpa_t tdr)
+{
+	struct tdx_module_args in = {
+		.rcx = tdr,
+	};
+
+	return seamcall(TDH_IMPORT_COMMIT, &in);
+}
+
 #endif /* __KVM_X86_TDX_OPS_H */
