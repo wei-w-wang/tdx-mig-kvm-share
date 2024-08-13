@@ -747,4 +747,20 @@ static inline u64 tdh_export_abort(hpa_t tdr,
 	return seamcall(TDH_EXPORT_ABORT, &in);
 }
 
+static inline u64 tdh_export_restore(hpa_t tdr,
+				     u64 gpa_list_info,
+				     u64 *rcx)
+{
+	struct tdx_module_args in = {
+		.rcx = gpa_list_info,
+		.rdx = tdr,
+	};
+	u64 ret;
+
+	ret = seamcall_ret(TDH_EXPORT_RESTORE, &in);
+	*rcx = in.rcx;
+
+	return ret;
+}
+
 #endif /* __KVM_X86_TDX_OPS_H */
