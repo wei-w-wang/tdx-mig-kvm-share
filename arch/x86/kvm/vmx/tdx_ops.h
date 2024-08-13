@@ -682,4 +682,47 @@ static inline u64 tdh_import_state_td(hpa_t tdr,
 
 	return ret;
 }
+
+static inline u64 tdh_export_state_vp(hpa_t tdvpr,
+				      u64 mbmd_info,
+				      u64 page_list_info,
+				      u64 mig_stream_info,
+				      u64 *rdx)
+{
+	struct tdx_module_args in = {
+		.rcx = tdvpr,
+		.r8 = mbmd_info,
+		.r9 = page_list_info,
+		.r10 = mig_stream_info,
+	};
+	u64 ret;
+
+	ret = seamcall_ret(TDH_EXPORT_STATE_VP, &in);
+	*rdx = in.rdx;
+
+	return ret;
+}
+
+static inline u64 tdh_import_state_vp(hpa_t tdvpr,
+				      u64 mbmd_info,
+				      u64 page_list_info,
+				      u64 mig_stream_info,
+				      u64 *rcx,
+				      u64 *rdx)
+{
+	struct tdx_module_args in = {
+		.rcx = tdvpr,
+		.r8 = mbmd_info,
+		.r9 = page_list_info,
+		.r10 = mig_stream_info,
+	};
+	u64 ret;
+
+	ret = seamcall_ret(TDH_IMPORT_STATE_VP, &in);
+	*rcx = in.rcx;
+	*rdx = in.rdx;
+
+	return ret;
+}
+
 #endif /* __KVM_X86_TDX_OPS_H */
