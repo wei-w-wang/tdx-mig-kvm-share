@@ -1791,7 +1791,12 @@ static int handle_tdvmcall(struct kvm_vcpu *vcpu)
 
 void tdx_load_mmu_pgd(struct kvm_vcpu *vcpu, hpa_t root_hpa, int pgd_level)
 {
-	td_vmcs_write64(to_tdx(vcpu), SHARED_EPT_POINTER, root_hpa);
+	struct vcpu_tdx *tdx = to_tdx(vcpu);
+
+	if (!tdx->initialized)
+		return;
+
+	td_vmcs_write64(tdx, SHARED_EPT_POINTER, root_hpa);
 }
 
 static void tdx_unpin(struct kvm *kvm, kvm_pfn_t pfn)
@@ -3388,6 +3393,7 @@ static void tdx_td_vcpu_post_init(struct vcpu_tdx *tdx)
 {
 	struct kvm_vcpu *vcpu = &tdx->vcpu;
 	struct kvm_tdx *kvm_tdx = to_kvm_tdx(vcpu->kvm);
+	hpa_t root_hpa = vcpu->arch.mmu->root.hpa;
 
 	if (!kvm_tdx->td_initialized)
 		return;
@@ -3395,6 +3401,11 @@ static void tdx_td_vcpu_post_init(struct vcpu_tdx *tdx)
 	td_vmcs_write16(tdx, POSTED_INTR_NV, POSTED_INTR_VECTOR);
 	td_vmcs_write64(tdx, POSTED_INTR_DESC_ADDR, __pa(&tdx->pi_desc));
 	td_vmcs_setbit32(tdx, PIN_BASED_VM_EXEC_CONTROL, PIN_BASED_POSTED_INTR);
+
+	if (VALID_PAGE(root_hpa)) {
+		td_vmcs_write64(to_tdx(vcpu), SHARED_EPT_POINTER, root_hpa);
+		tdx_flush_tlb_current(vcpu);
+	}
 
 	vcpu->arch.tsc_offset = to_kvm_tdx(vcpu->kvm)->tsc_offset;
 	vcpu->arch.l1_tsc_offset = vcpu->arch.tsc_offset;
