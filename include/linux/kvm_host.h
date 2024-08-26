@@ -2496,4 +2496,13 @@ long kvm_arch_vcpu_pre_fault_memory(struct kvm_vcpu *vcpu,
 				    struct kvm_pre_fault_memory *range);
 #endif
 
+#if defined(CONFIG_KVM_GENERIC_PRE_FAULT_MEMORY) && defined(CONFIG_KVM_PRIVATE_MEM)
+int kvm_pre_fault_private_memory_nonleaf_all(struct kvm *kvm);
+#else
+static inline int kvm_pre_fault_private_memory_nonleaf_all(struct kvm *kvm)
+{
+	return -EOPNOTSUPP;
+}
+#endif
+
 #endif

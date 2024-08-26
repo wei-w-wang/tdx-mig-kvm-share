@@ -4433,6 +4433,44 @@ static int kvm_vcpu_pre_fault_memory(struct kvm_vcpu *vcpu,
 	/* Return success if at least one page was mapped successfully.  */
 	return full_size == range->size ? r : 0;
 }
+
+#ifdef CONFIG_KVM_PRIVATE_MEM
+int kvm_pre_fault_private_memory_nonleaf_all(struct kvm *kvm)
+{
+	struct kvm_memslots *slots = kvm_memslots(kvm);
+	struct kvm_vcpu *vcpu = kvm_get_vcpu(kvm, 0);
+	struct kvm_pre_fault_memory range;
+	struct kvm_memory_slot *memslot;
+	int bkt, ret = 0;
+
+	range.flags = KVM_PRE_FAULT_MEMORY_F_NOLEAF;
+	kvm_for_each_memslot(memslot, bkt, slots) {
+		if (!(memslot->flags & KVM_MEM_GUEST_MEMFD))
+			continue;
+
+		range.gpa = gfn_to_gpa(memslot->base_gfn);
+		range.size = memslot->npages * PAGE_SIZE;
+		ret = kvm_vm_set_mem_attributes(kvm, memslot->base_gfn,
+						memslot->base_gfn + memslot->npages,
+						KVM_MEMORY_ATTRIBUTE_PRIVATE);
+		if (ret) {
+			printk("%s: Failed to set slot memory to private: %d\n",
+				__func__, ret);
+			return ret;
+		}
+		ret = kvm_vcpu_pre_fault_memory(vcpu, &range);
+		if (ret) {
+			printk("%s: Failed to pre_fault slot memory:%d\n",
+				__func__, ret);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(kvm_pre_fault_private_memory_nonleaf_all);
+#endif
+
 #endif
 
 static long kvm_vcpu_ioctl(struct file *filp,
