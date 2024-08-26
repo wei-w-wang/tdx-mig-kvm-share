@@ -57,6 +57,7 @@ struct kvm_tdx {
 	struct kvm_cpuid2 *cpuid;
 
 	struct tdx_binding_info *binding_info;
+	struct tdx_mig_state *mig_state;
 };
 
 union tdx_exit_reason {
