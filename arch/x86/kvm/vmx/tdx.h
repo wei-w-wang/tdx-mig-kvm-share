@@ -16,6 +16,17 @@
 #include "posted_intr.h"
 #include "pmu_intel.h"
 
+struct tdx_binding_info {
+	/* Is the source side MigTD */
+	bool is_src;
+	/* Number of users of the binding_info memory */
+	refcount_t users_count;
+	/* Identify the user TD and the binding slot */
+	uint64_t handle;
+	/* UUID of the user TD */
+	uint64_t  uuid[4];
+};
+
 struct kvm_tdx {
 	struct kvm kvm;
 
@@ -44,6 +55,8 @@ struct kvm_tdx {
 	atomic64_t nr_premapped;
 
 	struct kvm_cpuid2 *cpuid;
+
+	struct tdx_binding_info *binding_info;
 };
 
 union tdx_exit_reason {

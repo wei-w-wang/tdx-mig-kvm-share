@@ -180,6 +180,9 @@ void tdx_load_mmu_pgd(struct kvm_vcpu *vcpu, hpa_t root_hpa, int root_level);
 int tdx_gmem_private_max_mapping_level(struct kvm *kvm, kvm_pfn_t pfn);
 void tdx_post_mmu_map_page(struct kvm_vcpu *vcpu,
 			   struct kvm_pre_fault_memory *mapping);
+
+int tdx_mig_prepare(struct kvm *kvm, struct kvm_cgm_prepare *prepare);
+
 #else
 static inline int tdx_hardware_setup(struct kvm_x86_ops *x86_ops) { return -EOPNOTSUPP; }
 static inline void tdx_hardware_unsetup(void) {}
@@ -231,6 +234,13 @@ static inline int tdx_sept_flush_remote_tlbs(struct kvm *kvm) { return 0; }
 static inline void tdx_load_mmu_pgd(struct kvm_vcpu *vcpu, hpa_t root_hpa, int root_level) {}
 static inline int tdx_gmem_private_max_mapping_level(struct kvm *kvm, kvm_pfn_t pfn) { return 0; }
 static inline void tdx_post_mmu_map_page(struct kvm_vcpu *vcpu, struct kvm_pre_fault_memory *mapping) {}
+
+static inline int tdx_mig_prepare(struct kvm *kvm,
+				  struct kvm_cgm_migration_prepare *prepare)
+{
+	return -EOPNOTSUPP;
+}
+
 #endif
 
 #endif /* __KVM_X86_VMX_X86_OPS_H */
