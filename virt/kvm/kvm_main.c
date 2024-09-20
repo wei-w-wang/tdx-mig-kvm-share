@@ -4389,7 +4389,6 @@ static int kvm_vcpu_ioctl_get_stats_fd(struct kvm_vcpu *vcpu)
 static int kvm_vcpu_pre_fault_memory(struct kvm_vcpu *vcpu,
 				     struct kvm_pre_fault_memory *range)
 {
-	int idx;
 	long r;
 	u64 full_size;
 
@@ -4402,7 +4401,6 @@ static int kvm_vcpu_pre_fault_memory(struct kvm_vcpu *vcpu,
 		return -EINVAL;
 
 	vcpu_load(vcpu);
-	idx = srcu_read_lock(&vcpu->kvm->srcu);
 
 	full_size = range->size;
 	do {
@@ -4423,7 +4421,6 @@ static int kvm_vcpu_pre_fault_memory(struct kvm_vcpu *vcpu,
 		cond_resched();
 	} while (range->size);
 
-	srcu_read_unlock(&vcpu->kvm->srcu, idx);
 	vcpu_put(vcpu);
 
 	/* Return success if at least one page was mapped successfully.  */
@@ -4433,12 +4430,15 @@ static int kvm_vcpu_pre_fault_memory(struct kvm_vcpu *vcpu,
 #ifdef CONFIG_KVM_PRIVATE_MEM
 int kvm_pre_fault_private_memory_nonleaf_all(struct kvm *kvm)
 {
-	struct kvm_memslots *slots = kvm_memslots(kvm);
+	struct kvm_memslots *slots;
 	struct kvm_vcpu *vcpu = kvm_get_vcpu(kvm, 0);
 	struct kvm_pre_fault_memory range;
 	struct kvm_memory_slot *memslot;
-	int bkt, ret = 0;
+	int idx, bkt, ret = 0;
 
+	idx = srcu_read_lock(&kvm->srcu);
+
+	slots  = kvm_memslots(kvm);
 	range.flags = KVM_PRE_FAULT_MEMORY_F_NOLEAF;
 	kvm_for_each_memslot(memslot, bkt, slots) {
 		if (!(memslot->flags & KVM_MEM_GUEST_MEMFD))
@@ -4452,17 +4452,18 @@ int kvm_pre_fault_private_memory_nonleaf_all(struct kvm *kvm)
 		if (ret) {
 			printk("%s: Failed to set slot memory to private: %d\n",
 				__func__, ret);
-			return ret;
+			break;
 		}
 		ret = kvm_vcpu_pre_fault_memory(vcpu, &range);
 		if (ret) {
 			printk("%s: Failed to pre_fault slot memory:%d\n",
 				__func__, ret);
-			return ret;
+			break;
 		}
 	}
 
-	return 0;
+	srcu_read_unlock(&kvm->srcu, idx);
+	return ret;
 }
 EXPORT_SYMBOL_GPL(kvm_pre_fault_private_memory_nonleaf_all);
 #endif
@@ -4672,11 +4673,15 @@ out_free1:
 #ifdef CONFIG_KVM_GENERIC_PRE_FAULT_MEMORY
 	case KVM_PRE_FAULT_MEMORY: {
 		struct kvm_pre_fault_memory range;
+		int idx;
 
 		r = -EFAULT;
 		if (copy_from_user(&range, argp, sizeof(range)))
 			break;
+		idx = srcu_read_lock(&vcpu->kvm->srcu);
 		r = kvm_vcpu_pre_fault_memory(vcpu, &range);
+		srcu_read_unlock(&vcpu->kvm->srcu, idx);
+
 		/* Pass back leftover range. */
 		if (copy_to_user(argp, &range, sizeof(range)))
 			r = -EFAULT;
