@@ -992,6 +992,7 @@ static void tdx_mig_handle_export_mem_error(struct kvm *kvm,
 {
 	union tdx_mig_gpa_list_entry *entries;
 	uint64_t i;
+	int idx;
 
 	entries = stream->gpa_list.entries;
 	for (i = 0; i < npages; i++) {
@@ -999,8 +1000,11 @@ static void tdx_mig_handle_export_mem_error(struct kvm *kvm,
 		 * Re-migrate the failed entries by putting them back to the
 		 * dirty bitmap.
 		 */
-		if (entries[i].status != GPA_LIST_S_SUCCESS)
+		if (entries[i].status != GPA_LIST_S_SUCCESS) {
+			idx = srcu_read_lock(&kvm->srcu);
 			mark_page_dirty(kvm, (gfn_t)entries[i].gfn);
+			srcu_read_unlock(&kvm->srcu, idx);
+		}
 	}
 }
 
