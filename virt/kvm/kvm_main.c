@@ -1538,10 +1538,6 @@ static int check_memory_region_flags(struct kvm *kvm,
 	if (kvm_arch_has_private_mem(kvm))
 		valid_flags |= KVM_MEM_GUEST_MEMFD;
 
-	/* Dirty logging private memory is not currently supported. */
-	if (mem->flags & KVM_MEM_GUEST_MEMFD)
-		valid_flags &= ~KVM_MEM_LOG_DIRTY_PAGES;
-
 	/*
 	 * GUEST_MEMFD is incompatible with read-only memslots, as writes to
 	 * read-only memslots have emulated MMIO, not page fault, semantics,
@@ -2016,9 +2012,6 @@ int __kvm_set_memory_region(struct kvm *kvm,
 		if ((kvm->nr_memslot_pages + npages) < kvm->nr_memslot_pages)
 			return -EINVAL;
 	} else { /* Modify an existing slot. */
-		/* Private memslots are immutable, they can only be deleted. */
-		if (mem->flags & KVM_MEM_GUEST_MEMFD)
-			return -EINVAL;
 		if ((mem->userspace_addr != old->userspace_addr) ||
 		    (npages != old->npages) ||
 		    ((mem->flags ^ old->flags) & KVM_MEM_READONLY))
@@ -2048,6 +2041,9 @@ int __kvm_set_memory_region(struct kvm *kvm,
 	new->flags = mem->flags;
 	new->userspace_addr = mem->userspace_addr;
 	if (mem->flags & KVM_MEM_GUEST_MEMFD) {
+		if (change == KVM_MR_FLAGS_ONLY)
+			kvm_gmem_unbind(old);
+
 		r = kvm_gmem_bind(kvm, new, mem->guest_memfd, mem->guest_memfd_offset);
 		if (r)
 			goto out;
