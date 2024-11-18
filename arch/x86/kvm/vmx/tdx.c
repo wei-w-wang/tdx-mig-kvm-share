@@ -667,8 +667,6 @@ int tdx_vcpu_create(struct kvm_vcpu *vcpu)
 	vcpu->arch.cr0_guest_owned_bits = -1ul;
 	vcpu->arch.cr4_guest_owned_bits = -1ul;
 
-	vcpu->arch.tsc_offset = kvm_tdx->tsc_offset;
-	vcpu->arch.l1_tsc_offset = vcpu->arch.tsc_offset;
 	/*
 	 * TODO: support off-TD debug.  If TD DEBUG is enabled, guest state
 	 * can be accessed. guest_state_protected = false. and kvm ioctl to
@@ -2747,6 +2745,39 @@ out:
 	return r;
 }
 
+static int tdx_td_vcpu_setup(struct kvm_vcpu *vcpu)
+{
+	struct kvm_tdx *kvm_tdx = to_kvm_tdx(vcpu->kvm);
+	struct vcpu_tdx *tdx = to_tdx(vcpu);
+	unsigned long *tdcx_pa = tdx->tdcx_pa;
+	int i;
+	u64 err;
+
+	err = tdh_vp_create(kvm_tdx->tdr_pa, tdx->tdvpr_pa);
+	if (KVM_BUG_ON(err, vcpu->kvm)) {
+		pr_tdx_error(TDH_VP_CREATE, err);
+		return -EIO;
+	}
+
+	for (i = 0; i < kvm_tdx->nr_vcpu_tdcx_pages; i++) {
+		err = tdh_vp_addcx(tdx->tdvpr_pa, tdcx_pa[i]);
+		if (KVM_BUG_ON(err, vcpu->kvm)) {
+			pr_tdx_error(TDH_VP_ADDCX, err);
+			/*
+			 * Pages already added are reclaimed by the vcpu_free
+			 * method, but the rest are freed here.
+			 */
+			for (; i < kvm_tdx->nr_vcpu_tdcx_pages; i++) {
+				free_page((unsigned long)__va(tdcx_pa[i]));
+				tdcx_pa[i] = 0;
+			}
+			return -EIO;
+		}
+	}
+
+	return 0;
+}
+
 /* VMM can pass one 64bit auxiliary data to vcpu via RCX for guest BIOS. */
 static int tdx_td_vcpu_init(struct kvm_vcpu *vcpu, u64 vcpu_rcx)
 {
@@ -2778,28 +2809,19 @@ static int tdx_td_vcpu_init(struct kvm_vcpu *vcpu, u64 vcpu_rcx)
 		tdx->tdcx_pa[i] = __pa(va);
 	}
 
-	err = tdh_vp_create(kvm_tdx->tdr_pa, tdx->tdvpr_pa);
-	if (KVM_BUG_ON(err, vcpu->kvm)) {
-		ret = -EIO;
-		pr_tdx_error(TDH_VP_CREATE, err);
-		goto free_tdcx;
-	}
+	vcpu->arch.apic->apicv_active = false;
 
-	for (i = 0; i < kvm_tdx->nr_vcpu_tdcx_pages; i++) {
-		err = tdh_vp_addcx(tdx->tdvpr_pa, tdx->tdcx_pa[i]);
-		if (KVM_BUG_ON(err, vcpu->kvm)) {
-			pr_tdx_error(TDH_VP_ADDCX, err);
-			/*
-			 * Pages already added are reclaimed by the vcpu_free
-			 * method, but the rest are freed here.
-			 */
-			for (; i < kvm_tdx->nr_vcpu_tdcx_pages; i++) {
-				free_page((unsigned long)__va(tdx->tdcx_pa[i]));
-				tdx->tdcx_pa[i] = 0;
-			}
-			return -EIO;
-		}
-	}
+	/*
+	 * Keep the tdvpr and tdvpx pages allocated above, but adding them to
+	 * the TDX module and the TDH.VP.CREATE seamcall require TD to be
+	 * initialized.
+	 */
+	if (kvm_tdx->state == TD_STATE_UNINITIALIZED)
+		return 0;
+
+	ret = tdx_td_vcpu_setup(vcpu);
+	if (ret)
+		goto free_tdcx;
 
 	if (modinfo->tdx_features0 & MD_FIELD_ID_FEATURES0_TOPOLOGY_ENUM)
 		err = tdh_vp_init_apicid(tdx->tdvpr_pa, vcpu_rcx, vcpu->vcpu_id);
@@ -2810,9 +2832,6 @@ static int tdx_td_vcpu_init(struct kvm_vcpu *vcpu, u64 vcpu_rcx)
 		pr_tdx_error(TDH_VP_INIT, err);
 		return -EIO;
 	}
-
-	vcpu->arch.apic->apicv_active = false;
-	vcpu->arch.mp_state = KVM_MP_STATE_RUNNABLE;
 
 	return 0;
 
@@ -2908,6 +2927,24 @@ out:
 	return r;
 }
 
+static void tdx_td_vcpu_finish_init(struct vcpu_tdx *tdx)
+{
+	struct kvm_vcpu *vcpu = &tdx->vcpu;
+	struct kvm_tdx *kvm_tdx = to_kvm_tdx(vcpu->kvm);
+
+	if (kvm_tdx->state == TD_STATE_UNINITIALIZED)
+		return;
+
+	td_vmcs_write16(tdx, POSTED_INTR_NV, POSTED_INTR_VECTOR);
+	td_vmcs_write64(tdx, POSTED_INTR_DESC_ADDR, __pa(&tdx->pi_desc));
+	td_vmcs_setbit32(tdx, PIN_BASED_VM_EXEC_CONTROL, PIN_BASED_POSTED_INTR);
+
+	vcpu->arch.tsc_offset = to_kvm_tdx(vcpu->kvm)->tsc_offset;
+	vcpu->arch.l1_tsc_offset = vcpu->arch.tsc_offset;
+	vcpu->arch.mp_state = KVM_MP_STATE_RUNNABLE;
+	tdx->state = VCPU_TD_STATE_INITIALIZED;
+}
+
 static int tdx_vcpu_init(struct kvm_vcpu *vcpu, struct kvm_tdx_cmd *cmd)
 {
 	struct msr_data apic_base_msr;
@@ -2937,11 +2974,7 @@ static int tdx_vcpu_init(struct kvm_vcpu *vcpu, struct kvm_tdx_cmd *cmd)
 	if (ret)
 		return ret;
 
-	td_vmcs_write16(tdx, POSTED_INTR_NV, POSTED_INTR_VECTOR);
-	td_vmcs_write64(tdx, POSTED_INTR_DESC_ADDR, __pa(&tdx->pi_desc));
-	td_vmcs_setbit32(tdx, PIN_BASED_VM_EXEC_CONTROL, PIN_BASED_POSTED_INTR);
-
-	tdx->state = VCPU_TD_STATE_INITIALIZED;
+	tdx_td_vcpu_finish_init(tdx);
 	return 0;
 }
 
