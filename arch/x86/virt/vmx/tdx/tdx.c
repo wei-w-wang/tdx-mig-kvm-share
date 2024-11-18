@@ -2247,3 +2247,13 @@ u64 tdh_import_state_vp(u64 tdvpr, u64 mbmd_info, u64 page_list_info,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(tdh_import_state_vp);
+
+u64 tdh_import_end(u64 tdr)
+{
+	struct tdx_module_args args = {
+		.rcx = tdr,
+	};
+
+	return seamcall(TDH_IMPORT_END, &args);
+}
+EXPORT_SYMBOL_GPL(tdh_import_end);
