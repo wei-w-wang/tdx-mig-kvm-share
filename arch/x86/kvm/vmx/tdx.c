@@ -195,7 +195,7 @@ static __always_inline union vmx_exit_reason tdexit_exit_reason(struct kvm_vcpu 
  */
 static bool tdx_has_exit_reason(struct kvm_vcpu *vcpu)
 {
-	u64 status = to_tdx(vcpu)->vp_enter_ret & TDX_SEAMCALL_STATUS_MASK;
+	u64 status = seamcall_masked_status(to_tdx(vcpu)->vp_enter_ret);
 
 	return status == TDX_SUCCESS || status == TDX_NON_RECOVERABLE_VCPU ||
 	       status == TDX_NON_RECOVERABLE_TD ||
@@ -1771,7 +1771,7 @@ static void tdx_track(struct kvm *kvm)
 
 	do {
 		err = tdh_mem_track(kvm_tdx->tdr_pa);
-	} while (unlikely((err & TDX_SEAMCALL_STATUS_MASK) == TDX_OPERAND_BUSY));
+	} while (unlikely(seamcall_masked_status(err) == TDX_OPERAND_BUSY));
 
 	if (KVM_BUG_ON(err, kvm))
 		pr_tdx_error(TDH_MEM_TRACK, err);
@@ -1925,7 +1925,7 @@ int tdx_handle_exit(struct kvm_vcpu *vcpu, fastpath_t fastpath)
 	}
 
 	/* From now, the seamcall status should be TDX_SUCCESS. */
-	WARN_ON_ONCE((vp_enter_ret & TDX_SEAMCALL_STATUS_MASK) != TDX_SUCCESS);
+	WARN_ON_ONCE(seamcall_masked_status(vp_enter_ret) != TDX_SUCCESS);
 	exit_reason = tdexit_exit_reason(vcpu);
 
 	switch (exit_reason.basic) {
@@ -2444,7 +2444,7 @@ static int __tdx_td_init(struct kvm *kvm, struct td_params *td_params,
 	}
 
 	err = tdh_mng_init(kvm_tdx->tdr_pa, __pa(td_params), &rcx);
-	if ((err & TDX_SEAMCALL_STATUS_MASK) == TDX_OPERAND_INVALID) {
+	if (seamcall_masked_status(err) == TDX_OPERAND_INVALID) {
 		/*
 		 * Because a user gives operands, don't warn.
 		 * Return a hint to the user because it's sometimes hard for the
@@ -2729,7 +2729,7 @@ static int tdx_td_finalizemr(struct kvm *kvm, struct kvm_tdx_cmd *cmd)
 		return -EINVAL;
 
 	cmd->hw_error = tdh_mr_finalize(kvm_tdx->tdr_pa);
-	if ((cmd->hw_error & TDX_SEAMCALL_STATUS_MASK) == TDX_OPERAND_BUSY)
+	if (seamcall_masked_status(cmd->hw_error) == TDX_OPERAND_BUSY)
 		return -EAGAIN;
 	if (KVM_BUG_ON(cmd->hw_error, kvm)) {
 		pr_tdx_error(TDH_MR_FINALIZE, cmd->hw_error);
