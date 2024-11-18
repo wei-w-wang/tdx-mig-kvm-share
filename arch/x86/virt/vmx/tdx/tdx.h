@@ -49,6 +49,8 @@
 #define TDH_VP_WR			43
 #define TDH_PHYMEM_PAGE_WBINVD		41
 #define TDH_SYS_CONFIG			45
+#define TDH_SERVTD_BIND			48
+#define TDH_SERVTD_PREBIND		49
 
 /*
  * SEAMCALL leaf:

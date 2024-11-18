@@ -152,6 +152,12 @@ const struct tdx_sys_info *tdx_get_sysinfo(void);
 int tdx_guest_keyid_alloc(void);
 void tdx_guest_keyid_free(unsigned int keyid);
 
+enum kvm_tdx_servtd_type {
+	KVM_TDX_SERVTD_TYPE_MIGTD = 0,
+
+	KVM_TDX_SERVTD_TYPE_MAX,
+};
+
 /* SEAMCALL wrappers for creating/destroying/running TDX guests */
 u64 tdh_vp_enter(u64 tdvpr, struct tdx_module_args *args);
 u64 tdh_mng_addcx(u64 tdr, u64 tdcs);
@@ -180,6 +186,11 @@ u64 tdh_mem_page_remove(u64 tdr, u64 gpa, u64 level, u64 *rcx, u64 *rdx);
 u64 tdh_phymem_cache_wb(bool resume);
 u64 tdh_phymem_page_wbinvd_tdr(u64 tdr);
 u64 tdh_phymem_page_wbinvd_hkid(u64 hpa, u64 hkid);
+u64 tdh_servtd_bind(u64 servtd_tdr, u64 target_tdr, u64 slot_idx,
+		    u64 attr, u64 type, u64 *rcx, u64 *r10, u64 *r11,
+		    u64 *r12, u64 *r13);
+u64 tdh_servtd_prebind(u64 target_tdr, u64 hash_addr, u64 slot_idx, u64 attr,
+		       enum kvm_tdx_servtd_type type);
 #else
 static inline void tdx_init(void) { }
 static inline int tdx_cpu_enable(void) { return -ENODEV; }

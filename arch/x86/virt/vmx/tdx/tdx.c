@@ -1965,3 +1965,42 @@ u64 tdh_phymem_page_wbinvd_hkid(u64 hpa, u64 hkid)
 	return seamcall(TDH_PHYMEM_PAGE_WBINVD, &args);
 }
 EXPORT_SYMBOL_GPL(tdh_phymem_page_wbinvd_hkid);
+
+u64 tdh_servtd_bind(u64 servtd_tdr, u64 target_tdr, u64 slot_idx, u64 attr,
+                    u64 type, u64 *rcx, u64 *r10, u64 *r11, u64 *r12, u64 *r13)
+{
+	struct tdx_module_args args = {
+		.rcx = target_tdr,
+		.rdx = servtd_tdr,
+		.r8 = slot_idx,
+		.r9 = type,
+		.r10 = attr,
+	};
+	u64 ret;
+
+	ret = seamcall_saved_ret(TDH_SERVTD_BIND, &args);
+
+	*rcx = args.rcx;
+	*r10 = args.r10;
+	*r11 = args.r11;
+	*r12 = args.r12;
+	*r13 = args.r13;
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(tdh_servtd_bind);
+
+u64 tdh_servtd_prebind(u64 target_tdr, u64 hash_addr, u64 slot_idx, u64 attr,
+		       enum kvm_tdx_servtd_type type)
+{
+	struct tdx_module_args args = {
+		.rcx = target_tdr,
+		.rdx = hash_addr,
+		.r8 = slot_idx,
+		.r9 = type,
+		.r10 = attr,
+	};
+
+	return seamcall(TDH_SERVTD_PREBIND, &args);
+}
+EXPORT_SYMBOL_GPL(tdh_servtd_prebind);
