@@ -25,6 +25,10 @@ union tdx_mig_stream_info {
 		uint64_t rsvd	: 47;
 		uint64_t resume	: 1;
 	};
+	struct {
+		uint64_t rsvd1	       : 63;
+		uint64_t in_order_done : 1;
+	};
 };
 
 struct tdx_mig_mbmd_data {
@@ -814,4 +818,43 @@ int tdx_mig_start(struct kvm *kvm, struct kvm_cgm_data *data)
 		return tdx_mig_export_state_immutable(kvm_tdx, stream, data);
 
 	return tdx_mig_import_state_immutable(kvm_tdx, stream, data);
+}
+
+static int tdx_mig_stream_export_track(struct kvm_tdx *kvm_tdx,
+				       struct tdx_mig_stream *stream,
+				       struct kvm_cgm_data *data,
+				       bool need_start_token)
+{
+	union tdx_mig_stream_info stream_info = {.val = 0};
+	struct page *page;
+	uint64_t err;
+	int ret;
+
+	ret = pin_user_pages_unlocked(data->uaddr + data->size, 1,
+				      &page, FOLL_WRITE);
+	if (ret != 1)
+		return -ENOMEM;
+
+	tdx_mig_stream_mbmd_init(stream, page);
+
+	stream_info.in_order_done = need_start_token;
+	err = tdh_export_track(kvm_tdx->tdr_pa, stream->mbmd.addr_and_size,
+			       stream_info.val);
+	unpin_user_page(page);
+	if (seamcall_masked_status(err) != TDX_SUCCESS) {
+		pr_err("Export epoch token failed: %llx\n", err);
+		return -EIO;
+	}
+
+	data->size += stream->mbmd.data->size;
+	return 0;
+}
+
+int tdx_mig_get_epoch_token(struct kvm *kvm, struct kvm_cgm_data *data)
+{
+	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
+	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
+	struct tdx_mig_stream *stream = &mig_state->stream;
+
+	return tdx_mig_stream_export_track(kvm_tdx, stream, data, false);
 }
