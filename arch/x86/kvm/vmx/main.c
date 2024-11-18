@@ -961,6 +961,14 @@ static int vt_cgm_set_vcpu_state(struct kvm_vcpu *vcpu,
 	return tdx_mig_set_vcpu_state(vcpu, data);
 }
 
+static int vt_cgm_end(struct kvm *kvm, long abort)
+{
+	if (!is_td(kvm))
+		return -ENOTTY;
+
+	return tdx_mig_end(kvm, abort);
+}
+
 #define VMX_REQUIRED_APICV_INHIBITS				\
 	(BIT(APICV_INHIBIT_REASON_DISABLED) |			\
 	 BIT(APICV_INHIBIT_REASON_ABSENT) |			\
@@ -1132,6 +1140,7 @@ struct kvm_x86_ops vt_x86_ops __initdata = {
 	.cgm_set_memory_state = vt_cgm_set_memory_state,
 	.cgm_get_vcpu_state = vt_cgm_get_vcpu_state,
 	.cgm_set_vcpu_state = vt_cgm_set_vcpu_state,
+	.cgm_end = vt_cgm_end,
 };
 
 struct kvm_x86_init_ops vt_init_ops __initdata = {

@@ -202,6 +202,7 @@ struct tdx_mig_state {
 	uint32_t nr_ubuf_pages;
 	uint32_t nr_streams;
 	bool is_src;
+	bool started;
 	atomic_t nr_vcpus_migrated;
 	/*
 	 * Array to store physical addresses of the migration stream context
@@ -729,6 +730,7 @@ static int tdx_mig_import_state_immutable(struct kvm_tdx *kvm_tdx,
 					  struct tdx_mig_stream *stream,
 					  struct kvm_cgm_data *data)
 {
+	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
 	uint32_t total_pages = DIV_ROUND_UP(data->size, PAGE_SIZE);
 	struct tdx_mig_page_list *page_list = &stream->page_list;
 	union tdx_mig_stream_info stream_info = {.val = 0};
@@ -767,6 +769,7 @@ static int tdx_mig_import_state_immutable(struct kvm_tdx *kvm_tdx,
 		return -EIO;
 	}
 
+	mig_state->started = true;
 	kvm_tdx->kvm.arch.pre_fault_allowed = true;
 	return kvm_pre_fault_private_memory_nonleaf_all(&kvm_tdx->kvm);
 }
@@ -775,6 +778,7 @@ static int tdx_mig_export_state_immutable(struct kvm_tdx *kvm_tdx,
 					  struct tdx_mig_stream *stream,
 					  struct kvm_cgm_data *data)
 {
+	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
 	const struct tdx_sys_info_td_mig_cap *td_mig_cap =
 						&tdx_sysinfo->td_mig_cap;
 	/* Immutable state pages plus 1 MBMD page */
@@ -812,6 +816,7 @@ static int tdx_mig_export_state_immutable(struct kvm_tdx *kvm_tdx,
 	mbmd_ext->driver_version = TDX_MIG_DRIVER_VERSION;
 	data->size = (num_exported + TDX_MIG_MBMD_NPAGES) * PAGE_SIZE;
 
+	mig_state->started = true;
 	return 0;
 }
 
@@ -1560,6 +1565,51 @@ int tdx_mig_set_vcpu_state(struct kvm_vcpu *vcpu, struct kvm_cgm_data *data)
 	if (atomic_inc_return(&mig_state->nr_vcpus_migrated) ==
 	    atomic_read(&vcpu->kvm->online_vcpus))
 		tdx_mig_set_epoch_token(vcpu->kvm, data);
+
+	return 0;
+}
+
+static int tdx_mig_export_abort(struct kvm_tdx *kvm_tdx)
+{
+	uint64_t err;
+
+	err = tdh_export_abort(kvm_tdx->tdr_pa, 0, 0);
+	if (err != TDX_SUCCESS) {
+		pr_err("Failed to abort export: %llx\n", err);
+		return -EIO;
+	}
+
+	return kvm_mmu_restore_private_pages(&kvm_tdx->kvm);
+}
+
+int tdx_mig_end(struct kvm *kvm, long abort)
+{
+	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
+	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
+	uint64_t err;
+
+	if (!mig_state->started)
+		return 0;
+
+	mig_state->started = false;
+	if (abort) {
+		if (mig_state->is_src)
+			return tdx_mig_export_abort(kvm_tdx);
+		else
+			return 0;
+	}
+
+	if (!mig_state->is_src) {
+		err = tdh_import_end(kvm_tdx->tdr_pa);
+		if (err != TDX_SUCCESS) {
+			pr_err("Failed to end TD migration: %llx\n", err);
+			return -EIO;
+		}
+		kvm_tdx->state = TD_STATE_RUNNABLE;
+	}
+
+	pr_info("TD (PID: %d) migration completes\n",
+		kvm_tdx->kvm.userspace_pid);
 
 	return 0;
 }
