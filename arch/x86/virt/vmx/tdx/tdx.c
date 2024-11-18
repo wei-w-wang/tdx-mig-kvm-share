@@ -2083,3 +2083,27 @@ u64 tdh_export_unblockw(u64 tdr, u64 ept_info, u64 *rcx, u64 *rdx)
 	return ret;
 }
 EXPORT_SYMBOL_GPL(tdh_export_unblockw);
+
+u64 tdh_export_track(u64 tdr, u64 mbmd_info, u64 mig_stream_info)
+{
+	struct tdx_module_args args = {
+		.rcx = tdr,
+		.r8 = mbmd_info,
+		.r10 = mig_stream_info,
+	};
+
+	return seamcall(TDH_EXPORT_TRACK, &args);
+}
+EXPORT_SYMBOL_GPL(tdh_export_track);
+
+u64 tdh_import_track(u64 tdr, u64 mbmd_info, u64 mig_stream_info)
+{
+	struct tdx_module_args args = {
+		.rcx = tdr,
+		.r8 = mbmd_info,
+		.r10 = mig_stream_info,
+	};
+
+	return seamcall(TDH_IMPORT_TRACK, &args);
+}
+EXPORT_SYMBOL_GPL(tdh_import_track);
