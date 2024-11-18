@@ -2173,3 +2173,40 @@ u64 tdh_export_pasue(u64 tdr)
 	return seamcall(TDH_EXPORT_PAUSE, &args);
 }
 EXPORT_SYMBOL_GPL(tdh_export_pasue);
+
+u64 tdh_export_state_td(u64 tdr, u64 mbmd_info, u64 page_list_info,
+			u64 mig_stream_info, u64 *rdx)
+{
+	struct tdx_module_args args = {
+		.rcx = tdr,
+		.r8 = mbmd_info,
+		.r9 = page_list_info,
+		.r10 = mig_stream_info,
+	};
+	u64 ret;
+
+	ret = seamcall_ret(TDH_EXPORT_STATE_TD, &args);
+	*rdx = args.rdx;
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(tdh_export_state_td);
+
+u64 tdh_import_state_td(u64 tdr, u64 mbmd_info, u64 page_list_info,
+			u64 mig_stream_info, u64 *rcx, u64 *rdx)
+{
+	struct tdx_module_args args = {
+		.rcx = tdr,
+		.r8 = mbmd_info,
+		.r9 = page_list_info,
+		.r10 = mig_stream_info,
+	};
+	u64 ret;
+
+	ret = seamcall_ret(TDH_IMPORT_STATE_TD, &args);
+	*rcx = args.rcx;
+	*rdx = args.rdx;
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(tdh_import_state_td);

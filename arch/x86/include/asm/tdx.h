@@ -208,6 +208,10 @@ u64 tdh_import_mem(u64 tdr, u64 mbmd_info, u64 gpa_list_info,
 		   u64 buf_list_info, u64 mac_list0_info, u64 mac_list1_info,
 		   u64 td_page_list_info, u64 mig_stream_info, u64 *rcx);
 u64 tdh_export_pasue(u64 tdr);
+u64 tdh_export_state_td(u64 tdr, u64 mbmd_info, u64 page_list_info,
+			u64 mig_stream_info, u64 *rdx);
+u64 tdh_import_state_td(u64 tdr, u64 mbmd_info, u64 page_list_info,
+			u64 mig_stream_info, u64 *rcx, u64 *rdx);
 #else
 static inline void tdx_init(void) { }
 static inline int tdx_cpu_enable(void) { return -ENODEV; }
