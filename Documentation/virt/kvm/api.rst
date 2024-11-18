@@ -6449,6 +6449,28 @@ the capability to be present.
 
 `flags` must currently be zero.
 
+4.144 KVM_CGM_PREPARE
+---------------------------------
+
+:Capability: KVM_CGM_CAP
+:Architectures: x86
+:Type: vm ioctl
+:Parameters: struct kvm_cgm_prepare (in)
+:Returns: 0 on success, < 0 on error
+
+::
+
+  struct kvm_cgm_prepare {
+        __u8 is_src; /* Is the migration source guest? */
+	__u8 pad[7];
+	__u64 args; /* Vendor-specific data */
+  };
+
+KVM_CGM_PREPARE is used by userspace to request the secure firmware (e.g. TDX
+module) via KVM to prepare migration (e.g. setting up session keys) for a
+confidential/secure guest. This is usually called before a live migration
+session starts, and the subsequent migration session should proceed only when 0
+is returned.
 
 5. The kvm_run structure
 ========================
