@@ -4250,7 +4250,7 @@ static int kvm_vcpu_pre_fault_memory(struct kvm_vcpu *vcpu,
 	long r;
 	u64 full_size;
 
-	if (range->flags)
+	if (range->flags && (range->flags & ~KVM_PRE_FAULT_MEMORY_F_NOLEAF))
 		return -EINVAL;
 
 	if (!PAGE_ALIGNED(range->gpa) ||

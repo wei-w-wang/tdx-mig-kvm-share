@@ -1567,6 +1567,7 @@ struct kvm_create_guest_memfd {
 
 #define KVM_PRE_FAULT_MEMORY	_IOWR(KVMIO, 0xd5, struct kvm_pre_fault_memory)
 
+#define KVM_PRE_FAULT_MEMORY_F_NOLEAF		(1ULL << 0)
 struct kvm_pre_fault_memory {
 	__u64 gpa;
 	__u64 size;

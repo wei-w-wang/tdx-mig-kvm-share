@@ -1334,8 +1334,10 @@ int kvm_tdp_mmu_map(struct kvm_vcpu *vcpu, struct kvm_page_fault *fault)
 	goto retry;
 
 map_target_level:
-	ret = tdp_mmu_map_handle_target_level(vcpu, fault, &iter);
-
+	if (fault->noleaf)
+		ret = RET_PF_FIXED;
+	else
+		ret = tdp_mmu_map_handle_target_level(vcpu, fault, &iter);
 retry:
 	rcu_read_unlock();
 	return ret;
