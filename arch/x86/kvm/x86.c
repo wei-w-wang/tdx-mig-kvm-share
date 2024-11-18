@@ -6348,6 +6348,18 @@ long kvm_arch_vcpu_ioctl(struct file *filp,
 		r = 0;
 		break;
 	}
+	case KVM_CGM_SET_VCPU_STATE: {
+		struct kvm_cgm_data data;
+
+		r = -ENOTTY;
+		if (!kvm_x86_ops.cgm_set_vcpu_state)
+			goto out;
+		r = -EFAULT;
+		if (copy_from_user(&data, argp, sizeof(data)))
+			goto out;
+		r = static_call(kvm_x86_cgm_set_vcpu_state)(vcpu, &data);
+		break;
+	}
 	default:
 		r = -EINVAL;
 	}

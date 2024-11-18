@@ -6599,6 +6599,20 @@ Userspace supplies a list buffers through "struct kvm_cgm_data". The state data
 (usually encrypted by the secure firmware) will be loaded into the buffers,
 with the data size set to "struct kvm_cgm_data" on return of the ioctl.
 
+4.150 KVM_CGM_SET_VCPU_STATE
+---------------------------------
+
+:Capability: KVM_CGM_CAP
+:Architectures: x86
+:Type: vcpu ioctl
+:Parameters: struct kvm_cgm_data (in)
+:Returns: 0 on success, < 0 on error
+
+KVM_CGM_SET_VCPU_STATE is used by userspace, on the live migration destination
+side, to request the secure firmware (e.g. TDX module) via KVM to set vcpu
+state data. Userspace places the vcpu state data into a buffer shared to KVM
+via "struct kvm_cgm_data".
+
 5. The kvm_run structure
 ========================
 
