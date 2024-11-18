@@ -158,6 +158,7 @@ int tdx_sept_set_private_spte(struct kvm *kvm, gfn_t gfn,
 int tdx_sept_remove_private_spte(struct kvm *kvm, gfn_t gfn,
 				 enum pg_level level, kvm_pfn_t pfn);
 int tdx_write_block_private_pages(struct kvm *kvm, gfn_t *gfns, uint32_t num);
+int tdx_write_unblock_private_page(struct kvm *kvm, gfn_t gfn, int level);
 
 void tdx_flush_tlb_current(struct kvm_vcpu *vcpu);
 void tdx_flush_tlb_all(struct kvm_vcpu *vcpu);
@@ -232,6 +233,11 @@ static inline int tdx_sept_remove_private_spte(struct kvm *kvm, gfn_t gfn,
 
 static int tdx_write_block_private_pages(struct kvm *kvm, gfn_t *gfns,
 					 uint32_t num)
+{
+	return -EOPNOTSUPP;
+}
+
+static int tdx_write_unblock_private_page(struct kvm *kvm, gfn_t gfn, int level)
 {
 	return -EOPNOTSUPP;
 }

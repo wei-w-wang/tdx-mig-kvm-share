@@ -435,6 +435,11 @@ static int tdx_bind_migtd(struct kvm_tdx *usertd_tdx,
 	return 0;
 }
 
+int tdx_write_unblock_private_page(struct kvm *kvm, gfn_t gfn, int level)
+{
+	return -EOPNOTSUPP;
+}
+
 static int tdx_mig_stream_create(struct kvm_tdx *kvm_tdx, hpa_t *migsc_paddr)
 {
 	unsigned long migsc_va, migsc_pa;

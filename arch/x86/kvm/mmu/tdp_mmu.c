@@ -1961,12 +1961,17 @@ EXPORT_SYMBOL_GPL(kvm_tdp_mmu_gpa_is_mapped);
  * WARNING: This function is only intended to be called during fast_page_fault.
  */
 u64 *kvm_tdp_mmu_fast_pf_get_last_sptep(struct kvm_vcpu *vcpu, gfn_t gfn,
-					u64 *spte)
+					u64 *spte, bool is_private)
 {
 	/* Fast pf is not supported for mirrored roots  */
-	struct kvm_mmu_page *root = tdp_mmu_get_root(vcpu, KVM_DIRECT_ROOTS);
+	struct kvm_mmu_page *root;
 	struct tdp_iter iter;
 	tdp_ptep_t sptep = NULL;
+
+	if (is_private)
+		root = tdp_mmu_get_root(vcpu, KVM_MIRROR_ROOTS);
+	else
+		root = tdp_mmu_get_root(vcpu, KVM_DIRECT_ROOTS);
 
 	tdp_mmu_for_each_pte(iter, vcpu->kvm, root, gfn, gfn + 1) {
 		*spte = iter.old_spte;
