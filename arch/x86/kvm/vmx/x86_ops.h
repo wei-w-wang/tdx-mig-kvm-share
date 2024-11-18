@@ -175,6 +175,7 @@ int tdx_mig_get_memory_state(struct kvm *kvm, gfn_t *gfns, uint16_t gfn_num,
 			     struct kvm_cgm_data *data);
 int tdx_mig_set_memory_state(struct kvm *kvm, struct kvm_cgm_data *data,
 			     struct kvm_import_private_pages *pages);
+int tdx_mig_get_vcpu_state(struct kvm_vcpu *vcpu, struct kvm_cgm_data *data);
 
 #else
 static inline void tdx_disable_virtualization_cpu(void) {}
@@ -293,6 +294,12 @@ static inline int tdx_mig_get_memory_state(struct kvm *kvm,
 
 static inline int tdx_mig_set_memory_state(struct kvm *kvm, uint16_t gfn_num,
 					   struct kvm_cgm_data *data)
+{
+	return -EOPNOTSUPP;
+}
+
+static inline int tdx_mig_get_vcpu_state(struct kvm_vcpu *vcpu,
+					 struct kvm_cgm_data *data)
 {
 	return -EOPNOTSUPP;
 }
