@@ -3039,6 +3039,7 @@ static int tdx_td_init(struct kvm *kvm, struct kvm_tdx_cmd *cmd)
 		kvm->arch.gfn_direct_bits = TDX_SHARED_BIT_PWL_4;
 
 	if (kvm_tdx->attributes & TDX_TD_ATTR_MIG) {
+		kvm->arch.no_hugepage = true;
 		ret = tdx_mig_prebind_migtd(kvm_tdx,
 					    (void *)init_vm->migtd_hash);
 		if (ret)
