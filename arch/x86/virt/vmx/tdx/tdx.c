@@ -1631,7 +1631,7 @@ u64 tdh_mem_page_add(u64 tdr, u64 gpa, u64 hpa, u64 source, u64 *rcx, u64 *rdx)
 	u64 ret;
 
 	clflush_cache_range(__va(hpa), PAGE_SIZE);
-	ret = tdx_seamcall_sept(TDH_MEM_PAGE_ADD, &args);
+	ret = seamcall_ret(TDH_MEM_PAGE_ADD, &args);
 
 	*rcx = args.rcx;
 	*rdx = args.rdx;
@@ -1650,7 +1650,7 @@ u64 tdh_mem_sept_add(u64 tdr, u64 gpa, u64 level, u64 hpa, u64 *rcx, u64 *rdx)
 	u64 ret;
 
 	clflush_cache_range(__va(hpa), PAGE_SIZE);
-	ret = tdx_seamcall_sept(TDH_MEM_SEPT_ADD, &args);
+	ret = seamcall_ret(TDH_MEM_SEPT_ADD, &args);
 
 	*rcx = args.rcx;
 	*rdx = args.rdx;
@@ -1681,7 +1681,7 @@ u64 tdh_mem_page_aug(u64 tdr, u64 gpa, u64 hpa, u64 *rcx, u64 *rdx)
 	u64 ret;
 
 	clflush_cache_range(__va(hpa), PAGE_SIZE);
-	ret = tdx_seamcall_sept(TDH_MEM_PAGE_AUG, &args);
+	ret = seamcall_ret(TDH_MEM_PAGE_AUG, &args);
 
 	*rcx = args.rcx;
 	*rdx = args.rdx;
@@ -1698,7 +1698,7 @@ u64 tdh_mem_range_block(u64 tdr, u64 gpa, u64 level, u64 *rcx, u64 *rdx)
 	};
 	u64 ret;
 
-	ret = tdx_seamcall_sept(TDH_MEM_RANGE_BLOCK, &args);
+	ret = seamcall_ret(TDH_MEM_RANGE_BLOCK, &args);
 
 	*rcx = args.rcx;
 	*rdx = args.rdx;
@@ -1927,7 +1927,7 @@ u64 tdh_mem_page_remove(u64 tdr, u64 gpa, u64 level, u64 *rcx, u64 *rdx)
 	};
 	u64 ret;
 
-	ret = tdx_seamcall_sept(TDH_MEM_PAGE_REMOVE, &args);
+	ret = seamcall_ret(TDH_MEM_PAGE_REMOVE, &args);
 
 	*rcx = args.rcx;
 	*rdx = args.rdx;
