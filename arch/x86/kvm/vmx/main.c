@@ -546,6 +546,21 @@ static bool vt_get_if_flag(struct kvm_vcpu *vcpu)
 	return vmx_get_if_flag(vcpu);
 }
 
+#if IS_ENABLED(CONFIG_HYPERV) || IS_ENABLED(CONFIG_INTEL_TDX_HOST)
+static int vt_flush_remote_tlbs(struct kvm *kvm)
+{
+        if (is_td(kvm))
+                return tdx_flush_remote_tlbs(kvm);
+
+        /*
+         * fallback to KVM_REQ_TLB_FLUSH.
+         * See kvm_arch_flush_remote_tlb() and kvm_flush_remote_tlbs().
+         */
+        return -EOPNOTSUPP;
+}
+
+#endif
+
 static void vt_flush_tlb_all(struct kvm_vcpu *vcpu)
 {
 	if (is_td_vcpu(vcpu)) {
@@ -958,6 +973,7 @@ struct kvm_x86_ops vt_x86_ops __initdata = {
 	.set_rflags = vt_set_rflags,
 	.get_if_flag = vt_get_if_flag,
 
+	.flush_remote_tlbs = vt_flush_remote_tlbs,
 	.flush_tlb_all = vt_flush_tlb_all,
 	.flush_tlb_current = vt_flush_tlb_current,
 	.flush_tlb_gva = vt_flush_tlb_gva,

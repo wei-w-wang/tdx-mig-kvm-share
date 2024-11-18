@@ -160,6 +160,7 @@ int tdx_sept_remove_private_spte(struct kvm *kvm, gfn_t gfn,
 int tdx_write_block_private_pages(struct kvm *kvm, gfn_t *gfns, uint32_t num);
 int tdx_write_unblock_private_page(struct kvm *kvm, gfn_t gfn, int level);
 
+int tdx_flush_remote_tlbs(struct kvm *kvm);
 void tdx_flush_tlb_current(struct kvm_vcpu *vcpu);
 void tdx_flush_tlb_all(struct kvm_vcpu *vcpu);
 void tdx_load_mmu_pgd(struct kvm_vcpu *vcpu, hpa_t root_hpa, int root_level);

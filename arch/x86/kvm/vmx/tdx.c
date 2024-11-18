@@ -3066,6 +3066,17 @@ out:
 	return ret;
 }
 
+int tdx_flush_remote_tlbs(struct kvm *kvm)
+{
+        if (unlikely(!is_td(kvm)))
+                return -EOPNOTSUPP;
+
+        if (is_hkid_assigned(to_kvm_tdx(kvm)))
+                tdx_track(kvm);
+
+        return 0;
+}
+
 void tdx_flush_tlb_current(struct kvm_vcpu *vcpu)
 {
 	/*
