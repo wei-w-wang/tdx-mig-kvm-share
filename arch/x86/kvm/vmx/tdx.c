@@ -44,6 +44,8 @@ static enum cpuhp_state tdx_cpuhp_state;
 
 static const struct tdx_sys_info *tdx_sysinfo;
 
+#include "tdx_mig.c"
+
 void tdh_vp_rd_failed(struct vcpu_tdx *tdx, char *uclass, u32 field, u64 err)
 {
 	KVM_BUG_ON(1, tdx->vcpu.kvm);
@@ -57,7 +59,8 @@ void tdh_vp_wr_failed(struct vcpu_tdx *tdx, char *uclass, char *op, u32 field,
 	pr_err("TDH_VP_WR[%s.0x%x]%s0x%llx failed: 0x%llx\n", uclass, field, op, val, err);
 }
 
-#define KVM_SUPPORTED_TD_ATTRS (TDX_TD_ATTR_SEPT_VE_DISABLE)
+#define KVM_SUPPORTED_TD_ATTRS (TDX_TD_ATTR_SEPT_VE_DISABLE | \
+				TDX_TD_ATTR_MIG)
 
 static u64 tdx_get_supported_attrs(const struct tdx_sys_info_td_conf *td_conf)
 {
@@ -2647,6 +2650,9 @@ static int tdx_td_init(struct kvm *kvm, struct kvm_tdx_cmd *cmd)
 	else
 		kvm->arch.gfn_direct_bits = TDX_SHARED_BIT_PWL_4;
 
+	if (kvm_tdx->attributes & TDX_TD_ATTR_MIG)
+		ret = tdx_mig_prebind_migtd(kvm_tdx,
+					    (void *)init_vm->migtd_hash);
 out:
 	/* kfree() accepts NULL. */
 	kfree(init_vm);
