@@ -782,14 +782,21 @@ void tdx_vcpu_put(struct kvm_vcpu *vcpu)
 static void tdx_vcpu_free_tdcx(struct vcpu_tdx *tdx)
 {
 	struct kvm_tdx *kvm_tdx = to_kvm_tdx(tdx->vcpu.kvm);
+	unsigned long tdcx_pa;
 	int i;
 
 	if (!tdx->tdcx_pa)
 		return;
 
 	for (i = 0; i < kvm_tdx->nr_vcpu_tdcx_pages; i++) {
-		if (tdx->tdcx_pa[i])
-			tdx_reclaim_control_page(tdx->tdcx_pa[i]);
+		tdcx_pa = tdx->tdcx_pa[i];
+		if (!tdcx_pa)
+			continue;
+
+		if (tdx->state == VCPU_TD_STATE_UNINITIALIZED)
+			free_page((unsigned long)__va(tdcx_pa));
+		else
+			tdx_reclaim_control_page(tdcx_pa);
 	}
 	kfree(tdx->tdcx_pa);
 	tdx->tdcx_pa = NULL;
@@ -800,7 +807,10 @@ static void tdx_vcpu_free_tdvpr(struct vcpu_tdx *tdx)
 	if (!tdx->tdvpr_pa)
 		return;
 
-	tdx_reclaim_control_page(tdx->tdvpr_pa);
+	if (tdx->state == VCPU_TD_STATE_UNINITIALIZED)
+		free_page((unsigned long)__va(tdx->tdvpr_pa));
+	else
+		tdx_reclaim_control_page(tdx->tdvpr_pa);
 	tdx->tdvpr_pa = 0;
 }
 
