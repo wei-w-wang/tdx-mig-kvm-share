@@ -781,11 +781,35 @@ void tdx_vcpu_put(struct kvm_vcpu *vcpu)
 	tdx_prepare_switch_to_host(vcpu);
 }
 
+static void tdx_vcpu_free_tdcx(struct vcpu_tdx *tdx)
+{
+	struct kvm_tdx *kvm_tdx = to_kvm_tdx(tdx->vcpu.kvm);
+	int i;
+
+	if (!tdx->tdcx_pa)
+		return;
+
+	for (i = 0; i < kvm_tdx->nr_vcpu_tdcx_pages; i++) {
+		if (tdx->tdcx_pa[i])
+			tdx_reclaim_control_page(tdx->tdcx_pa[i]);
+	}
+	kfree(tdx->tdcx_pa);
+	tdx->tdcx_pa = NULL;
+}
+
+static void tdx_vcpu_free_tdvpr(struct vcpu_tdx *tdx)
+{
+	if (!tdx->tdvpr_pa)
+		return;
+
+	tdx_reclaim_control_page(tdx->tdvpr_pa);
+	tdx->tdvpr_pa = 0;
+}
+
 void tdx_vcpu_free(struct kvm_vcpu *vcpu)
 {
 	struct kvm_tdx *kvm_tdx = to_kvm_tdx(vcpu->kvm);
 	struct vcpu_tdx *tdx = to_tdx(vcpu);
-	int i;
 
 	/*
 	 * It is not possible to reclaim pages while hkid is assigned. It might
@@ -798,22 +822,11 @@ void tdx_vcpu_free(struct kvm_vcpu *vcpu)
 	if (is_hkid_assigned(kvm_tdx))
 		return;
 
-	if (tdx->tdcx_pa) {
-		for (i = 0; i < kvm_tdx->nr_vcpu_tdcx_pages; i++) {
-			if (tdx->tdcx_pa[i])
-				tdx_reclaim_control_page(tdx->tdcx_pa[i]);
-		}
-		kfree(tdx->tdcx_pa);
-		tdx->tdcx_pa = NULL;
-	}
-	if (tdx->tdvpr_pa) {
-		tdx_reclaim_control_page(tdx->tdvpr_pa);
-		tdx->tdvpr_pa = 0;
-	}
+	tdx_vcpu_free_tdcx(tdx);
+	tdx_vcpu_free_tdvpr(tdx);
 
 	tdx->state = VCPU_TD_STATE_UNINITIALIZED;
 }
-
 
 static void tdx_complete_interrupts(struct kvm_vcpu *vcpu)
 {
