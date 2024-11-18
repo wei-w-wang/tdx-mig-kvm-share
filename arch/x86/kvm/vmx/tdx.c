@@ -1806,14 +1806,16 @@ int tdx_sept_remove_private_spte(struct kvm *kvm, gfn_t gfn,
 				 enum pg_level level, kvm_pfn_t pfn)
 {
 	int ret;
+	u64 err;
 
-	/*
-	 * HKID is released after all private pages have been removed, and set
-	 * before any might be populated. Warn if zapping is attempted when
-	 * there can't be anything populated in the private EPT.
-	 */
-	if (KVM_BUG_ON(!is_hkid_assigned(to_kvm_tdx(kvm)), kvm))
-		return -EINVAL;
+	/* Reclaim the page during TD teardown */
+        if (!is_hkid_assigned(to_kvm_tdx(kvm))) {
+                err = tdx_reclaim_page(pfn_to_hpa(pfn));
+                if (KVM_BUG_ON(err, kvm))
+                        return -EIO;
+                tdx_unpin(kvm, pfn);
+                return 0;
+        }
 
 	ret = tdx_sept_zap_private_spte(kvm, gfn, level);
 	if (ret)
