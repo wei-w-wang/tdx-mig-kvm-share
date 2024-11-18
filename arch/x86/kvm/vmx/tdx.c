@@ -531,30 +531,26 @@ out:
 	free_cpumask_var(packages);
 }
 
-static void tdx_reclaim_td_control_pages(struct kvm *kvm)
+static void tdx_vm_free_tdcs(struct kvm_tdx *kvm_tdx)
 {
-	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
-	u64 err;
 	int i;
 
-	/*
-	 * tdx_mmu_release_hkid() failed to reclaim HKID.  Something went wrong
-	 * heavily with TDX module.  Give up freeing TD pages.  As the function
-	 * already warned, don't warn it again.
-	 */
-	if (is_hkid_assigned(kvm_tdx))
+	if (!kvm_tdx->tdcs_pa)
 		return;
 
-	if (kvm_tdx->tdcs_pa) {
-		for (i = 0; i < kvm_tdx->nr_tdcs_pages; i++) {
-			if (!kvm_tdx->tdcs_pa[i])
-				continue;
+	for (i = 0; i < kvm_tdx->nr_tdcs_pages; i++) {
+		if (!kvm_tdx->tdcs_pa[i])
+			continue;
 
-			tdx_reclaim_control_page(kvm_tdx->tdcs_pa[i]);
-		}
-		kfree(kvm_tdx->tdcs_pa);
-		kvm_tdx->tdcs_pa = NULL;
+		tdx_reclaim_control_page(kvm_tdx->tdcs_pa[i]);
 	}
+	kfree(kvm_tdx->tdcs_pa);
+	kvm_tdx->tdcs_pa = NULL;
+}
+
+static void tdx_vm_free_tdr(struct kvm_tdx *kvm_tdx)
+{
+	u64 err;
 
 	if (!kvm_tdx->tdr_pa)
 		return;
@@ -568,7 +564,7 @@ static void tdx_reclaim_td_control_pages(struct kvm *kvm)
 	 * when it is reclaiming TDCS).
 	 */
 	err = tdh_phymem_page_wbinvd_tdr(kvm_tdx->tdr_pa);
-	if (KVM_BUG_ON(err, kvm)) {
+	if (KVM_BUG_ON(err, &kvm_tdx->kvm)) {
 		pr_tdx_error(TDH_PHYMEM_PAGE_WBINVD, err);
 		return;
 	}
@@ -582,7 +578,16 @@ void tdx_vm_free(struct kvm *kvm)
 {
 	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
 
-	tdx_reclaim_td_control_pages(kvm);
+	/*
+	 * tdx_mmu_release_hkid() failed to reclaim HKID.  Something went wrong
+	 * heavily with TDX module.  Give up freeing TD pages.  As the function
+	 * already warned, don't warn it again.
+	 */
+	if (is_hkid_assigned(kvm_tdx))
+		return;
+
+	tdx_vm_free_tdcs(kvm_tdx);
+	tdx_vm_free_tdr(kvm_tdx);
 
 	kvm_tdx->state = TD_STATE_UNINITIALIZED;
 }
@@ -2420,7 +2425,7 @@ teardown:
 		kfree(tdcs_pa);
 
 	tdx_mmu_release_hkid(kvm);
-	tdx_reclaim_td_control_pages(kvm);
+	tdx_vm_free(kvm);
 
 	return ret;
 
