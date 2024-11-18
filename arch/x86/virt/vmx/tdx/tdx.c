@@ -2015,3 +2015,40 @@ u64 tdh_mig_stream_create(u64 tdr, u64 migsc)
 	return seamcall(TDH_MIG_STREAM_CREATE, &args);
 }
 EXPORT_SYMBOL_GPL(tdh_mig_stream_create);
+
+u64 tdh_export_state_immutable(u64 tdr, u64 mbmd_info, u64 page_list_info,
+			       u64 mig_stream_info, u64 *rdx)
+{
+	struct tdx_module_args args = {
+		.rcx = tdr,
+		.r8 = mbmd_info,
+		.r9 = page_list_info,
+		.r10 = mig_stream_info,
+	};
+	u64 ret;
+
+	ret = seamcall_ret(TDH_EXPORT_STATE_IMMUTABLE, &args);
+	*rdx = args.rdx;
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(tdh_export_state_immutable);
+
+u64 tdh_import_state_immutable(u64 tdr, u64 mbmd_info, u64 page_list_info,
+			       u64 mig_stream_info, u64 *rcx, u64 *rdx)
+{
+	struct tdx_module_args args = {
+		.rcx = tdr,
+		.r8 = mbmd_info,
+		.r9 = page_list_info,
+		.r10 = mig_stream_info,
+	};
+	u64 ret;
+
+	ret = seamcall_ret(TDH_IMPORT_STATE_IMMUTABLE, &args);
+	*rcx = args.rcx;
+	*rdx = args.rdx;
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(tdh_import_state_immutable);

@@ -192,6 +192,10 @@ u64 tdh_servtd_bind(u64 servtd_tdr, u64 target_tdr, u64 slot_idx,
 u64 tdh_servtd_prebind(u64 target_tdr, u64 hash_addr, u64 slot_idx, u64 attr,
 		       enum kvm_tdx_servtd_type type);
 u64 tdh_mig_stream_create(u64 tdr, u64 migsc);
+u64 tdh_export_state_immutable(u64 tdr, u64 mbmd_info, u64 page_list_info,
+			       u64 mig_stream_info, u64 *rdx);
+u64 tdh_import_state_immutable(u64 tdr, u64 mbmd_info, u64 page_list_info,
+			       u64 mig_stream_info, u64 *rcx, u64 *rdx);
 #else
 static inline void tdx_init(void) { }
 static inline int tdx_cpu_enable(void) { return -ENODEV; }
