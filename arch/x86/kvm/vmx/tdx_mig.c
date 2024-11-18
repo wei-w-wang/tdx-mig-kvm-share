@@ -1613,3 +1613,28 @@ int tdx_mig_end(struct kvm *kvm, long abort)
 
 	return 0;
 }
+
+int tdx_restore_private_page(struct kvm *kvm, gfn_t gfn)
+{
+	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
+	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
+	struct tdx_mig_stream *stream = &mig_state->stream;
+	struct tdx_mig_gpa_list *gpa_list = &stream->gpa_list;
+	uint64_t err, out_rcx;
+
+	tdx_mig_gpa_list_init(gpa_list, &gfn, 1, GPA_LIST_OP_RESTORE);
+
+	do {
+		err = tdh_export_restore(kvm_tdx->tdr_pa,
+					 gpa_list->info.val, &out_rcx);
+		if (seamcall_masked_status(err) == TDX_INTERRUPTED_RESUMABLE)
+			gpa_list->info.val = out_rcx;
+	} while (seamcall_masked_status(err) == TDX_INTERRUPTED_RESUMABLE);
+
+	if (seamcall_masked_status(err) != TDX_SUCCESS) {
+		pr_err("Failed to restore a private page, err=%llx\n", err);
+		return -EIO;
+	}
+
+	return 0;
+}
