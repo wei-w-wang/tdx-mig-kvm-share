@@ -4826,6 +4826,8 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
 	case KVM_CAP_READONLY_MEM:
 		r = kvm ? kvm_arch_has_readonly_mem(kvm) : 1;
 		break;
+	case KVM_CAP_CGM:
+		return KVM_CGM_UAPI_VERSION;
 	default:
 		break;
 	}
@@ -6785,6 +6787,28 @@ split_irqchip_unlock:
 		else
 			kvm->arch.apic_bus_cycle_ns = bus_cycle_ns;
 		mutex_unlock(&kvm->lock);
+		break;
+	}
+	case KVM_CAP_CGM: {
+		struct kvm_cap_cgm cap_cgm;
+		void __user *argp = (void __user *)cap->args[0];
+
+		r = -EINVAL;
+		if (!kvm_x86_ops.cgm_enable_cap)
+			break;
+
+		r = -EFAULT;
+		if (copy_from_user(&cap_cgm, argp, sizeof(struct kvm_cap_cgm)))
+			break;
+
+		r = static_call(kvm_x86_cgm_enable_cap)(kvm, &cap_cgm);
+		if (r)
+			break;
+
+		r = -EFAULT;
+		if (copy_to_user(argp, &cap_cgm, sizeof(struct kvm_cap_cgm)))
+			break;
+		r = 0;
 		break;
 	}
 	default:
