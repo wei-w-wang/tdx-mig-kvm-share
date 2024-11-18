@@ -6,41 +6,6 @@
 
 #include <linux/types.h>
 
-#define TDX_VERSION_SHIFT		16
-
-/*
- * TDX SEAMCALL API function leaves
- */
-#define TDH_VP_ENTER			0
-#define TDH_MNG_ADDCX			1
-#define TDH_MEM_PAGE_ADD		2
-#define TDH_MEM_SEPT_ADD		3
-#define TDH_VP_ADDCX			4
-#define TDH_MEM_PAGE_AUG		6
-#define TDH_MEM_RANGE_BLOCK		7
-#define TDH_MNG_KEY_CONFIG		8
-#define TDH_MNG_CREATE			9
-#define TDH_VP_CREATE			10
-#define TDH_MNG_RD			11
-#define TDH_MR_EXTEND			16
-#define TDH_MR_FINALIZE			17
-#define TDH_VP_FLUSH			18
-#define TDH_MNG_VPFLUSHDONE		19
-#define TDH_MNG_KEY_FREEID		20
-#define TDH_MNG_INIT			21
-#define TDH_VP_INIT			22
-#define TDH_VP_RD			26
-#define TDH_MNG_KEY_RECLAIMID		27
-#define TDH_PHYMEM_PAGE_RECLAIM		28
-#define TDH_MEM_PAGE_REMOVE		29
-#define TDH_MEM_SEPT_REMOVE		30
-#define TDH_SYS_RD			34
-#define TDH_MEM_TRACK			38
-#define TDH_MEM_RANGE_UNBLOCK		39
-#define TDH_PHYMEM_CACHE_WB		40
-#define TDH_PHYMEM_PAGE_WBINVD		41
-#define TDH_VP_WR			43
-
 /* TDX control structure (TDR/TDCS/TDVPS) field access codes */
 #define TDX_NON_ARCH			BIT_ULL(63)
 #define TDX_CLASS_SHIFT			56
