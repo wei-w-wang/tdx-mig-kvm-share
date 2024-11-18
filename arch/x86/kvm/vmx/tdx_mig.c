@@ -4,6 +4,147 @@
 
 #define TDX_MIG_MBMD_NPAGES 1
 
+struct tdx_mig_mbmd_data {
+	__u16 size;
+	__u16 mig_version;
+	__u16 migs_index;
+	__u8  mb_type;
+	__u8  rsvd0;
+	__u32 mb_counter;
+	__u32 mig_epoch;
+	__u64 iv_counter;
+	__u8  type_specific_info[];
+} __packed;
+
+struct tdx_mig_mbmd {
+	struct tdx_mig_mbmd_data *data;
+	uint64_t addr_and_size;
+};
+
+/*
+ * A MAC list specifies a list of MACs (message authentication code), and is
+ * used by TDH.EXPORT.MEM and TDH.IMPORT.MEM via its physical address, @hpa.
+ * The list is pointed by @entries and each entry in the list is 128-bit
+ * MAC containing a single AES-GMAC-256. Each MAC in the list is calculated by
+ * the TDX module over a 4KB guest private page and its corresponding GPA entry
+ * (from the gpa_list) to ensure their integrity during migration. The size of
+ * the list is 4KB, allowing it to accommodate up to 256 entries.
+ */
+struct tdx_mig_mac_list {
+	void *entries;
+	hpa_t hpa;
+};
+
+union tdx_mig_gpa_list_entry {
+	uint64_t val;
+	struct{
+		uint64_t level          : 2;   // Bits 1:0  :  Mapping level
+		uint64_t pending        : 1;   // Bit 2     :  Page is pending
+		uint64_t reserved_0     : 4;   // Bits 6:3
+		uint64_t l2_map         : 3;   // Bits 9:7  :  L2 mapping flags
+		uint64_t mig_type       : 2;   // Bits 11:10:  Migration type
+		uint64_t gfn            : 40;  // Bits 51:12
+#define GPA_LIST_OP_NOP		0
+#define GPA_LIST_OP_BLOCKW	1
+#define GPA_LIST_OP_EXPORT	1
+#define GPA_LIST_OP_RESTORE	1
+#define GPA_LIST_OP_CANCEL	2
+		uint64_t operation      : 2;   // Bits 53:52
+		uint64_t reserved_1     : 2;   // Bits 55:54
+#define GPA_LIST_S_SUCCESS	0
+		uint64_t status         : 5;   // Bits 56:52
+		uint64_t reserved_2     : 3;   // Bits 63:61
+	};
+};
+
+/*
+ * A GPA list specifies a list of GPAs, and is used by TDH.EXPORT.MEM and
+ * TDH.IMPORT.MEM, TDH.EXPORT.BLOCKW, and TDH.EXPORT.RESTORE via its physical
+ * address contained in @info. The list is pointed by @entries, and each entry
+ * is a 64-bit value containing a guest physical address and relevant info. The
+ * size of the list is 4KB, allowing it to accommodate up to 512 entries.
+ */
+union tdx_mig_gpa_list_info {
+	uint64_t val;
+	struct {
+		uint64_t rsvd0		: 3;
+		uint64_t first_entry	: 9;
+		uint64_t pfn		: 40;
+		uint64_t rsvd1		: 3;
+		uint64_t last_entry	: 9;
+	};
+};
+
+struct tdx_mig_gpa_list {
+	union tdx_mig_gpa_list_entry *entries;
+	union tdx_mig_gpa_list_info info;
+};
+
+/*
+ * A buffer list specifies a list of 4KB pages, and is used by TDH.EXPORT.MEM
+ * and TDH.IMPORT.MEM via its physical address, @hpa, to export and import
+ * guest private memory page data. The list is pointed by @entries and each
+ * entry is a 64-bit value containing the physical address of a 4KB page that
+ * is used as a buffer. The size of the list is 4KB, allowing it to accommodate
+ * up to 512 entries.
+ */
+union tdx_mig_buf_list_entry {
+	uint64_t val;
+	struct {
+		uint64_t rsvd0		: 12;
+		uint64_t pfn		: 40;
+		uint64_t rsvd1		: 11;
+		uint64_t invalid	: 1;
+	};
+};
+
+struct tdx_mig_buf_list {
+	union tdx_mig_buf_list_entry *entries;
+	hpa_t hpa;
+};
+
+/*
+ * A page list specifies a list of 4KB pages to be used by the non-memory
+ * states export and import, i.e. TDH.EXPORT.STATE.* and TDH.IMPORT.STATE.* via
+ * its physical address contained in @info. The list is pointed by @entries and
+ * each entry is a 64-bit value containing the physical address of a 4KB page
+ * that is used as a buffer. The size of the list is 4KB, allowing it to
+ * accommodate up to 512 entries.
+ */
+union tdx_mig_page_list_info {
+	uint64_t val;
+	struct {
+		uint64_t rsvd0		: 12;
+		uint64_t pfn		: 40;
+		uint64_t rsvd1		: 3;
+		uint64_t last_entry	: 9;
+	};
+};
+
+struct tdx_mig_page_list {
+	hpa_t *entries;
+	union tdx_mig_page_list_info info;
+};
+
+struct tdx_mig_stream {
+	uint16_t idx;
+	struct tdx_mig_mbmd mbmd;
+	/* List of MACs used when export/import the TD private memory */
+	struct tdx_mig_mac_list mac_list;
+	/* List of GPA entries used when export/import the TD private memory */
+	struct tdx_mig_gpa_list gpa_list;
+	/* List of buffers to export/import the TD private memory data */
+	struct tdx_mig_buf_list mem_buf_list;
+	/* List of buffers to export/miport the TD non-memory state data */
+	struct tdx_mig_page_list page_list;
+	/*
+	 * Array of "struct page" to use with pin_user_pages() on ubufs (i.e.,
+	 * buffers shared from userspace) to export/import the TD private
+	 * state.
+	 */
+	struct page **pages;
+};
+
 struct tdx_mig_state {
 	uint32_t nr_ubuf_pages;
 	uint32_t nr_streams;
@@ -14,6 +155,7 @@ struct tdx_mig_state {
 	 */
 	hpa_t *migsc_paddrs;
 	hpa_t backward_migsc_paddr;
+	struct tdx_mig_stream stream;
 };
 
 #define TDX_MIGTD_ATTR 0x000007ff00000000
@@ -88,6 +230,15 @@ static int tdx_mig_state_create(struct kvm_tdx *kvm_tdx)
 	return 0;
 }
 
+static void tdx_mig_stream_buffer_cleanup(struct tdx_mig_stream *stream)
+{
+	free_page((unsigned long)stream->gpa_list.entries);
+	free_page((unsigned long)stream->mac_list.entries);
+	free_page((unsigned long)stream->mem_buf_list.entries);
+	free_page((unsigned long)stream->page_list.entries);
+	kvfree(stream->pages);
+}
+
 static void tdx_mig_state_destroy(struct kvm_tdx *kvm_tdx)
 {
 	const struct tdx_sys_info_td_mig_cap *td_mig_cap =
@@ -108,6 +259,7 @@ static void tdx_mig_state_destroy(struct kvm_tdx *kvm_tdx)
 		tdx_reclaim_control_page(mig_state->migsc_paddrs[i]);
 	}
 
+	tdx_mig_stream_buffer_cleanup(&mig_state->stream);
 	kfree(mig_state->migsc_paddrs);
 	kfree(mig_state);
 	kvm_tdx->mig_state = NULL;
@@ -234,6 +386,76 @@ static int tdx_mig_stream_create(struct kvm_tdx *kvm_tdx, hpa_t *migsc_paddr)
 	return 0;
 }
 
+static void *tdx_mig_stream_list_alloc(hpa_t *hpa)
+{
+	struct page *page;
+
+	/*
+	 * Allocate the buf list page, which has 512 entries pointing to up to
+	 * 512 pages used as buffers to export/import migration data.
+	 */
+	page = alloc_page(GFP_KERNEL_ACCOUNT | __GFP_ZERO);
+	if (!page)
+		return NULL;
+	*hpa = page_to_phys(page);
+
+	return page_address(page);
+}
+
+static int tdx_mig_stream_buffer_setup(struct tdx_mig_stream *stream,
+				       uint16_t idx, uint32_t nr_ubuf_pages)
+{
+	void *vaddr;
+	hpa_t paddr;
+
+	/* Already retained from the previous sessions? */
+	if (stream->mem_buf_list.entries) {
+		WARN_ON(!stream->page_list.entries);
+		return 0;
+	}
+
+	vaddr = tdx_mig_stream_list_alloc(&paddr);
+	if (!vaddr)
+		return -ENOMEM;
+	stream->gpa_list.entries = vaddr;
+	stream->gpa_list.info.pfn = PHYS_PFN(paddr);
+
+	vaddr = tdx_mig_stream_list_alloc(&paddr);
+	if (!vaddr)
+		goto err_mac_list;
+	stream->mac_list.entries = vaddr;
+	stream->mac_list.hpa = paddr;
+
+	vaddr = tdx_mig_stream_list_alloc(&paddr);
+	if (!vaddr)
+		goto err_mem_buf_list;
+	stream->mem_buf_list.entries = vaddr;
+	stream->mem_buf_list.hpa = paddr;
+
+	vaddr = tdx_mig_stream_list_alloc(&paddr);
+	if (!vaddr)
+		goto err_page_list;
+	stream->page_list.entries = vaddr;
+	stream->page_list.info.pfn = PHYS_PFN(paddr);
+
+	stream->pages = kvmalloc_array(nr_ubuf_pages,
+				       sizeof(struct page *), GFP_KERNEL);
+	if (!stream->pages)
+		goto err_stream_pages;
+
+	stream->idx = idx;
+	return 0;
+err_stream_pages:
+	free_page((unsigned long)stream->page_list.entries);
+err_mac_list:
+	free_page((unsigned long)stream->gpa_list.entries);
+err_mem_buf_list:
+	free_page((unsigned long)stream->mac_list.entries);
+err_page_list:
+	free_page((unsigned long)stream->mem_buf_list.entries);
+	return -ENOMEM;
+}
+
 static int tdx_mig_state_setup(struct kvm_tdx *kvm_tdx)
 {
 	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
@@ -249,7 +471,8 @@ static int tdx_mig_state_setup(struct kvm_tdx *kvm_tdx)
 			return ret;
 	}
 
-	return 0;
+	return tdx_mig_stream_buffer_setup(&mig_state->stream, 0,
+					   mig_state->nr_ubuf_pages);
 }
 
 int tdx_mig_prepare(struct kvm *kvm, struct kvm_cgm_prepare *prepare)
