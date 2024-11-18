@@ -1604,7 +1604,7 @@ noinstr u64 tdh_vp_enter(u64 tdvpr, struct tdx_module_args *args)
 {
 	args->rcx = tdvpr;
 
-	return __seamcall_saved_ret(TDH_VP_ENTER, args);
+	return seamcall_saved_ret(TDH_VP_ENTER, args);
 }
 EXPORT_SYMBOL_GPL(tdh_vp_enter);
 
