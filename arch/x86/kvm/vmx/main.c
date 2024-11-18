@@ -860,6 +860,14 @@ static int vt_gmem_private_max_mapping_level(struct kvm *kvm, kvm_pfn_t pfn)
 	return 0;
 }
 
+static void vt_gmem_release(struct kvm *kvm)
+{
+	if (!is_td(kvm))
+		return;
+
+	return tdx_mmu_release_hkid(kvm);
+}
+
 #define VMX_REQUIRED_APICV_INHIBITS				\
 	(BIT(APICV_INHIBIT_REASON_DISABLED) |			\
 	 BIT(APICV_INHIBIT_REASON_ABSENT) |			\
@@ -1018,7 +1026,8 @@ struct kvm_x86_ops vt_x86_ops __initdata = {
 	.mem_enc_ioctl = vt_mem_enc_ioctl,
 	.vcpu_mem_enc_ioctl = vt_vcpu_mem_enc_ioctl,
 
-	.private_max_mapping_level = vt_gmem_private_max_mapping_level
+	.private_max_mapping_level = vt_gmem_private_max_mapping_level,
+	.gmem_release = vt_gmem_release,
 };
 
 struct kvm_x86_init_ops vt_init_ops __initdata = {

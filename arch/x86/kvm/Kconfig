@@ -94,6 +94,7 @@ config KVM_INTEL
 	depends on KVM && IA32_FEAT_CTL
 	select KVM_GENERIC_PRIVATE_MEM if INTEL_TDX_HOST
 	select KVM_GENERIC_MEMORY_ATTRIBUTES if INTEL_TDX_HOST
+	select HAVE_KVM_ARCH_GMEM_RELEASE if INTEL_TDX_HOST
 	help
 	  Provides support for KVM on processors equipped with Intel's VT
 	  extensions, a.k.a. Virtual Machine Extensions (VMX).

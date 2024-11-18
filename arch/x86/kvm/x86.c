@@ -13644,6 +13644,13 @@ void kvm_arch_gmem_invalidate(kvm_pfn_t start, kvm_pfn_t end)
 }
 #endif
 
+#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_RELEASE
+void kvm_arch_gmem_release(struct kvm *kvm)
+{
+	static_call_cond(kvm_x86_gmem_release)(kvm);
+}
+#endif
+
 int kvm_spec_ctrl_test_value(u64 value)
 {
 	/*

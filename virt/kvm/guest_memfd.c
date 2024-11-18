@@ -435,6 +435,10 @@ static int kvm_gmem_release(struct inode *inode, struct file *file)
 	struct kvm *kvm = gmem->kvm;
 	unsigned long index;
 
+#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_RELEASE
+	kvm_arch_gmem_release(kvm);
+#endif
+
 	/*
 	 * Prevent concurrent attempts to *unbind* a memslot.  This is the last
 	 * reference to the file and thus no new bindings can be created, but
