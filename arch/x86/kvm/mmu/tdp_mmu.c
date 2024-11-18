@@ -1961,8 +1961,8 @@ EXPORT_SYMBOL_GPL(kvm_tdp_mmu_gpa_is_mapped);
  *
  * WARNING: This function is only intended to be called during fast_page_fault.
  */
-u64 *kvm_tdp_mmu_fast_pf_get_last_sptep(struct kvm_vcpu *vcpu, gfn_t gfn,
-					u64 *spte, bool is_private)
+u64 *kvm_tdp_mmu_fast_get_last_sptep(struct kvm_vcpu *vcpu, gfn_t gfn,
+				     u64 *spte, bool is_private)
 {
 	/* Fast pf is not supported for mirrored roots  */
 	struct kvm_mmu_page *root;
@@ -1990,4 +1990,86 @@ u64 *kvm_tdp_mmu_fast_pf_get_last_sptep(struct kvm_vcpu *vcpu, gfn_t gfn,
 	 * outside of mmu_lock.
 	 */
 	return rcu_dereference(sptep);
+}
+
+int kvm_tdp_mmu_import_private_pages(struct kvm *kvm,
+				     struct kvm_cgm_data *data,
+				     struct kvm_import_private_pages *pages)
+{
+	struct kvm_vcpu *vcpu = kvm_get_vcpu(kvm, 0);
+	struct kvm_import_private_gfn *gfns = pages->gfns;
+	uint64_t page_nr = pages->page_nr;
+	uint64_t i, old_spte, new_spte;
+	struct kvm_memory_slot *slot;
+	struct page *page_unused;
+	struct kvm_mmu_page *sp;
+	uint64_t *sptep = NULL;
+	kvm_pfn_t pfn;
+	gfn_t gfn;
+	int ret;
+
+	for (i = 0; i < page_nr; i++) {
+		gfn = (gfn_t)(gfns[i].gfn);
+
+		if (!kvm_mem_is_private(kvm, gfn)) {
+			pr_err("Import page (gfn: %llx) isn't private\n", gfn);
+			return -EINVAL;
+		}
+
+		kvm_tdp_mmu_walk_lockless_begin();
+		kvm_tdp_mmu_fast_get_last_sptep(vcpu, gfn, &old_spte, true);
+		kvm_tdp_mmu_walk_lockless_end();
+
+		if (!is_shadow_present_pte(old_spte)) {
+			slot = gfn_to_memslot(kvm, gfn);
+			if (!slot) {
+				pr_err("Import page not valid\n");
+				return -EINVAL;
+			}
+			ret = kvm_gmem_get_pfn(kvm, slot,
+					       gfn, &pfn, &page_unused, NULL);
+			if (ret) {
+				pr_err("Failed to get pfn from gmem\n");
+				return -EIO;
+			}
+			/* Initial (first time) import of a private page */
+			gfns[i].init = true;
+		} else {
+			pfn = spte_to_pfn(old_spte);
+		}
+		pages->pfns[i] = pfn;
+	}
+
+	ret = static_call(kvm_x86_cgm_set_memory_state)(kvm, data, pages);
+	if (ret < 0)
+		return ret;
+
+	read_lock(&kvm->mmu_lock);
+	kvm_tdp_mmu_walk_lockless_begin();
+
+	for (i = 0; i < page_nr; i++) {
+		if (gfns[i].skip)
+			continue;
+
+		gfn = (gfn_t)(gfns[i].gfn);
+		pfn = pages->pfns[i];
+		sptep = kvm_tdp_mmu_fast_get_last_sptep(vcpu, gfn,
+							&old_spte, true);
+		if (!is_shadow_present_pte(old_spte)) {
+			sp = sptep_to_sp(rcu_dereference(sptep));
+			make_spte(vcpu, sp, slot, ACC_ALL,
+				  gfn, pfn, old_spte, false, true,
+				  !(slot->flags & KVM_MEM_READONLY),
+				  &new_spte);
+			__kvm_tdp_mmu_write_spte(sptep, new_spte);
+		} else if (gfns[i].remove) {
+			put_page(pfn_to_page(pfn));
+			__kvm_tdp_mmu_write_spte(sptep,
+						 SHADOW_NONPRESENT_VALUE);
+		}
+	}
+
+	kvm_tdp_mmu_walk_lockless_end();
+	read_unlock(&kvm->mmu_lock);
+	return ret;
 }

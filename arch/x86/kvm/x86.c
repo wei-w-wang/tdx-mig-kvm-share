@@ -7517,6 +7517,38 @@ set_pit2_out:
 		r = 0;
 		break;
 	}
+	case KVM_CGM_SET_MEMORY_STATE: {
+		struct kvm_import_private_pages *pages = kvm->arch.import_pages;
+		struct kvm_cgm_memory_state memory_state;
+		struct kvm_cgm_data *data;
+		void __user *gfns_u;
+
+		r = -ENOTTY;
+		if (!kvm_x86_ops.cgm_set_memory_state)
+			goto out;
+
+		r = -EFAULT;
+		if (copy_from_user(&memory_state, argp, sizeof(memory_state)))
+			goto out;
+
+		r = -ENOMEM;
+		if (!pages) {
+			pages = kzalloc(sizeof(struct kvm_import_private_pages),
+					GFP_KERNEL);
+			if (!pages)
+				goto out;
+			kvm->arch.import_pages = pages;
+		}
+		gfns_u = (void __user *)(uintptr_t)memory_state.gfns_uaddr;
+		if (copy_from_user(pages->gfns, gfns_u,
+				   memory_state.gfn_num * sizeof(uint64_t)))
+			goto out;
+
+		pages->page_nr = memory_state.gfn_num;
+		data = &memory_state.data;
+		r = kvm_mmu_import_private_pages(kvm, data, pages);
+		break;
+	}
 	default:
 		r = -ENOTTY;
 	}

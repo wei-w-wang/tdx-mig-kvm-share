@@ -3485,8 +3485,8 @@ static int fast_page_fault(struct kvm_vcpu *vcpu, struct kvm_page_fault *fault)
 		u64 new_spte;
 
 		if (tdp_mmu_enabled)
-			sptep = kvm_tdp_mmu_fast_pf_get_last_sptep(vcpu, fault->gfn,
-								   &spte, fault->is_private);
+			sptep = kvm_tdp_mmu_fast_get_last_sptep(vcpu, fault->gfn,
+								&spte, fault->is_private);
 		else
 			sptep = fast_pf_get_last_sptep(vcpu, fault->addr, &spte);
 
@@ -7805,3 +7805,18 @@ void kvm_mmu_init_memslot_memory_attributes(struct kvm *kvm,
 	}
 }
 #endif
+
+int kvm_mmu_import_private_pages(struct kvm *kvm, struct kvm_cgm_data *data,
+				 struct kvm_import_private_pages *pages)
+{
+	int idx, ret;
+
+	if (!tdp_mmu_enabled)
+		return -EOPNOTSUPP;
+
+	idx = srcu_read_lock(&kvm->srcu);
+	ret = kvm_tdp_mmu_import_private_pages(kvm, data, pages);
+	srcu_read_unlock(&kvm->srcu, idx);
+
+	return ret;
+}
