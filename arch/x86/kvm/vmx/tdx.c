@@ -313,28 +313,8 @@ static void tdx_clear_page(unsigned long page_pa)
 static int __tdx_reclaim_page(hpa_t pa)
 {
 	u64 err, rcx, rdx, r8;
-	int i;
 
-	for (i = TDX_SEAMCALL_RETRIES; i > 0; i--) {
-		err = tdh_phymem_page_reclaim(pa, &rcx, &rdx, &r8);
-
-		/*
-		 * TDH.PHYMEM.PAGE.RECLAIM is allowed only when TD is shutdown.
-		 * state.  i.e. destructing TD.
-		 * TDH.PHYMEM.PAGE.RECLAIM requires TDR and target page.
-		 * Because we're destructing TD, it's rare to contend with TDR.
-		 */
-		switch (err) {
-		case TDX_OPERAND_BUSY | TDX_OPERAND_ID_RCX:
-		case TDX_OPERAND_BUSY | TDX_OPERAND_ID_TDR:
-			cond_resched();
-			continue;
-		default:
-			goto out;
-		}
-	}
-
-out:
+	err = tdh_phymem_page_reclaim(pa, &rcx, &rdx, &r8);
 	if (WARN_ON_ONCE(err)) {
 		pr_tdx_error_3(TDH_PHYMEM_PAGE_RECLAIM, err, rcx, rdx, r8);
 		return -EIO;
@@ -512,8 +492,6 @@ void tdx_mmu_release_hkid(struct kvm *kvm)
 	 * associations, as all vCPU fds have been released at this stage.
 	 */
 	err = tdh_mng_vpflushdone(kvm_tdx->tdr_pa);
-	if (err == TDX_FLUSHVP_NOT_DONE)
-		goto out;
 	if (KVM_BUG_ON(err, kvm)) {
 		pr_tdx_error(TDH_MNG_VPFLUSHDONE, err);
 		pr_err("tdh_mng_vpflushdone() failed. HKID %d is leaked.\n",
@@ -950,17 +928,6 @@ static noinstr void tdx_vcpu_enter_exit(struct kvm_vcpu *vcpu)
 	guest_state_exit_irqoff();
 }
 
-static fastpath_t tdx_exit_handlers_fastpath(struct kvm_vcpu *vcpu)
-{
-	u64 vp_enter_ret = to_tdx(vcpu)->vp_enter_ret;
-
-	/* TDH.VP.ENTER checks TD EPOCH which can contend with TDH.MEM.TRACK. */
-	if (unlikely(vp_enter_ret == (TDX_OPERAND_BUSY | TDX_OPERAND_ID_TD_EPOCH)))
-		return EXIT_FASTPATH_REENTER_GUEST;
-
-	return EXIT_FASTPATH_NONE;
-}
-
 fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu, bool force_immediate_exit)
 {
 	struct vcpu_tdx *tdx = to_tdx(vcpu);
@@ -1002,7 +969,7 @@ fastpath_t tdx_vcpu_run(struct kvm_vcpu *vcpu, bool force_immediate_exit)
 
 	tdx_complete_interrupts(vcpu);
 
-	return tdx_exit_handlers_fastpath(vcpu);
+	return EXIT_FASTPATH_NONE;
 }
 
 void tdx_inject_nmi(struct kvm_vcpu *vcpu)
@@ -1667,15 +1634,7 @@ static int tdx_sept_drop_private_spte(struct kvm *kvm, gfn_t gfn,
 		return -EIO;
 	}
 
-	do {
-		/*
-		 * TDX_OPERAND_BUSY can happen on locking PAMT entry.  Because
-		 * this page was removed above, other thread shouldn't be
-		 * repeatedly operating on this page.  Just retry loop.
-		 */
-		err = tdh_phymem_page_wbinvd_hkid(hpa, (u16)kvm_tdx->hkid);
-	} while (unlikely(err == (TDX_OPERAND_BUSY | TDX_OPERAND_ID_RCX)));
-
+	err = tdh_phymem_page_wbinvd_hkid(hpa, (u16)kvm_tdx->hkid);
 	if (KVM_BUG_ON(err, kvm)) {
 		pr_tdx_error(TDH_PHYMEM_PAGE_WBINVD, err);
 		return -EIO;
@@ -1761,10 +1720,7 @@ static void tdx_track(struct kvm *kvm)
 
 	lockdep_assert_held_write(&kvm->mmu_lock);
 
-	do {
-		err = tdh_mem_track(kvm_tdx->tdr_pa);
-	} while (unlikely(seamcall_masked_status(err) == TDX_OPERAND_BUSY));
-
+	err = tdh_mem_track(kvm_tdx->tdr_pa);
 	if (KVM_BUG_ON(err, kvm))
 		pr_tdx_error(TDH_MEM_TRACK, err);
 
@@ -2381,11 +2337,6 @@ static int __tdx_td_init(struct kvm *kvm, struct td_params *td_params,
 	err = tdh_mng_create(kvm_tdx->tdr_pa, kvm_tdx->hkid);
 	mutex_unlock(&tdx_lock);
 
-	if (err == TDX_RND_NO_ENTROPY) {
-		ret = -EAGAIN;
-		goto free_packages;
-	}
-
 	if (WARN_ON_ONCE(err)) {
 		pr_tdx_error(TDH_MNG_CREATE, err);
 		ret = -EIO;
@@ -2423,11 +2374,6 @@ static int __tdx_td_init(struct kvm *kvm, struct td_params *td_params,
 	kvm_tdx->tdcs_pa = tdcs_pa;
 	for (i = 0; i < kvm_tdx->nr_tdcs_pages; i++) {
 		err = tdh_mng_addcx(kvm_tdx->tdr_pa, tdcs_pa[i]);
-		if (err == TDX_RND_NO_ENTROPY) {
-			/* Here it's hard to allow userspace to retry. */
-			ret = -EBUSY;
-			goto teardown;
-		}
 		if (WARN_ON_ONCE(err)) {
 			pr_tdx_error(TDH_MNG_ADDCX, err);
 			ret = -EIO;
@@ -2721,8 +2667,6 @@ static int tdx_td_finalizemr(struct kvm *kvm, struct kvm_tdx_cmd *cmd)
 		return -EINVAL;
 
 	cmd->hw_error = tdh_mr_finalize(kvm_tdx->tdr_pa);
-	if (seamcall_masked_status(cmd->hw_error) == TDX_OPERAND_BUSY)
-		return -EAGAIN;
 	if (KVM_BUG_ON(cmd->hw_error, kvm)) {
 		pr_tdx_error(TDH_MR_FINALIZE, cmd->hw_error);
 		return -EIO;
