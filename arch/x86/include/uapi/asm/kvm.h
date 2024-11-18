@@ -926,6 +926,9 @@ struct kvm_hyperv_eventfd {
 #define KVM_X86_SNP_VM		4
 #define KVM_X86_TDX_VM		5
 
+/* Set to delay TD initialization (i.e. TDH.MNG.INIT). */
+#define KVM_TDX_INIT_VM_F_DELAY_INIT	1
+
 /* Trust Domain eXtension sub-ioctl() commands. */
 enum kvm_tdx_cmd_id {
 	KVM_TDX_CAPABILITIES = 0,

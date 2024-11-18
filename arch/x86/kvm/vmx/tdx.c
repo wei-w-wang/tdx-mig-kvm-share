@@ -2279,8 +2279,17 @@ static int setup_tdparams(struct kvm *kvm, struct td_params *td_params,
 	return 0;
 }
 
+static int tdx_td_finish_init(struct kvm_tdx *kvm_tdx)
+{
+	/* Fields that need to be updated after TD is initialized */
+	kvm_tdx->state = TD_STATE_INITIALIZED;
+	kvm_tdx->tsc_offset = td_tdcs_exec_read64(kvm_tdx,
+						  TD_TDCS_EXEC_TSC_OFFSET);
+	return 0;
+}
+
 static int __tdx_td_init(struct kvm *kvm, struct td_params *td_params,
-			 u64 *seamcall_err)
+			 u64 *seamcall_err, bool delay_init)
 {
 	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
 	cpumask_var_t packages;
@@ -2399,6 +2408,9 @@ static int __tdx_td_init(struct kvm *kvm, struct td_params *td_params,
 		}
 	}
 
+	if (delay_init)
+		return 0;
+
 	err = tdh_mng_init(kvm_tdx->tdr_pa, __pa(td_params), &rcx);
 	if (seamcall_masked_status(err) == TDX_OPERAND_INVALID) {
 		/*
@@ -2415,8 +2427,7 @@ static int __tdx_td_init(struct kvm *kvm, struct td_params *td_params,
 		ret = -EIO;
 		goto teardown;
 	}
-
-	kvm_set_apicv_inhibit(kvm, APICV_INHIBIT_REASON_TDX);
+	tdx_td_finish_init(kvm_tdx);
 
 	return 0;
 
@@ -2566,7 +2577,7 @@ static int tdx_td_init(struct kvm *kvm, struct kvm_tdx_cmd *cmd)
 	if (kvm_tdx->state != TD_STATE_UNINITIALIZED)
 		return -EINVAL;
 
-	if (cmd->flags)
+	if (cmd->flags && cmd->flags != KVM_TDX_INIT_VM_F_DELAY_INIT)
 		return -EINVAL;
 
 	init_vm = kmalloc(sizeof(*init_vm) +
@@ -2612,11 +2623,11 @@ static int tdx_td_init(struct kvm *kvm, struct kvm_tdx_cmd *cmd)
 	if (ret)
 		goto out;
 
-	ret = __tdx_td_init(kvm, td_params, &cmd->hw_error);
+	ret = __tdx_td_init(kvm, td_params, &cmd->hw_error, cmd->flags & KVM_TDX_INIT_VM_F_DELAY_INIT);
 	if (ret)
 		goto out;
 
-	kvm_tdx->tsc_offset = td_tdcs_exec_read64(kvm_tdx, TD_TDCS_EXEC_TSC_OFFSET);
+	kvm_set_apicv_inhibit(kvm, APICV_INHIBIT_REASON_TDX);
 	kvm_tdx->attributes = td_params->attributes;
 	kvm_tdx->xfam = td_params->xfam;
 
@@ -2625,7 +2636,6 @@ static int tdx_td_init(struct kvm *kvm, struct kvm_tdx_cmd *cmd)
 	else
 		kvm->arch.gfn_direct_bits = TDX_SHARED_BIT_PWL_4;
 
-	kvm_tdx->state = TD_STATE_INITIALIZED;
 out:
 	/* kfree() accepts NULL. */
 	kfree(init_vm);
