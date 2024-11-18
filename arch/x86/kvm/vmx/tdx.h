@@ -21,6 +21,17 @@ enum kvm_tdx_state {
 #include "irq.h"
 #include "posted_intr.h"
 
+struct tdx_binding_info {
+	/* Is the source side MigTD */
+	bool is_src;
+	/* Number of users of the binding_info memory */
+	refcount_t users_count;
+	/* Identify the user TD and the binding slot */
+	uint64_t handle;
+	/* UUID of the user TD */
+	uint64_t  uuid[4];
+};
+
 struct kvm_tdx {
 	struct kvm kvm;
 
@@ -47,6 +58,8 @@ struct kvm_tdx {
 
 	/* For KVM_TDX_INIT_MEM_REGION. */
 	atomic64_t nr_premapped;
+
+	struct tdx_binding_info *binding_info;
 };
 
 /* TDX module vCPU states */
