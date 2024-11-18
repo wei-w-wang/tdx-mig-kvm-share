@@ -2004,3 +2004,14 @@ u64 tdh_servtd_prebind(u64 target_tdr, u64 hash_addr, u64 slot_idx, u64 attr,
 	return seamcall(TDH_SERVTD_PREBIND, &args);
 }
 EXPORT_SYMBOL_GPL(tdh_servtd_prebind);
+
+u64 tdh_mig_stream_create(hpa_t tdr, hpa_t migsc)
+{
+	struct tdx_module_args args = {
+		.rcx = migsc,
+		.rdx = tdr,
+	};
+
+	return seamcall(TDH_MIG_STREAM_CREATE, &args);
+}
+EXPORT_SYMBOL_GPL(tdh_mig_stream_create);

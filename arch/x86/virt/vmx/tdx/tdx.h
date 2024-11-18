@@ -51,6 +51,7 @@
 #define TDH_SYS_CONFIG			45
 #define TDH_SERVTD_BIND			48
 #define TDH_SERVTD_PREBIND		49
+#define TDH_MIG_STREAM_CREATE		96
 
 /*
  * SEAMCALL leaf:
