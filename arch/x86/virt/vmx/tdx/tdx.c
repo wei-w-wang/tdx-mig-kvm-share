@@ -2269,3 +2269,18 @@ u64 tdh_export_abort(u64 tdr, u64 mbmd_info, u64 mig_stream_info)
 	return seamcall(TDH_EXPORT_ABORT, &args);
 }
 EXPORT_SYMBOL_GPL(tdh_export_abort);
+
+u64 tdh_export_restore(u64 tdr, u64 gpa_list_info, u64 *rcx)
+{
+	struct tdx_module_args in = {
+		.rcx = gpa_list_info,
+		.rdx = tdr,
+	};
+	u64 ret;
+
+	ret = seamcall_ret(TDH_EXPORT_RESTORE, &in);
+	*rcx = in.rcx;
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(tdh_export_restore);

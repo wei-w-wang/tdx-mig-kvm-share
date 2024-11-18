@@ -218,6 +218,7 @@ u64 tdh_import_state_vp(u64 tdvpr, u64 mbmd_info, u64 page_list_info,
 			u64 mig_stream_info, u64 *rcx, u64 *rdx);
 u64 tdh_import_end(u64 tdr);
 u64 tdh_export_abort(u64 tdr, u64 mbmd_info, u64 mig_stream_info);
+u64 tdh_export_restore(u64 tdr, u64 gpa_list_info, u64 *rcx);
 #else
 static inline void tdx_init(void) { }
 static inline int tdx_cpu_enable(void) { return -ENODEV; }
