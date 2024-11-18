@@ -6613,6 +6613,23 @@ side, to request the secure firmware (e.g. TDX module) via KVM to set vcpu
 state data. Userspace places the vcpu state data into a buffer shared to KVM
 via "struct kvm_cgm_data".
 
+4.150 KVM_CGM_END
+---------------------------------
+
+:Capability: KVM_CGM_CAP
+:Architectures: x86
+:Type: vcpu ioctl
+:Parameters: long abort (in)
+:Returns: 0 on success, < 0 on error
+
+KVM_CGM_END is used by userspace, either on the source or destination side in
+live migration, to request the secure firmware (e.g. TDX module) via KVM to end
+the migration session. The "abort" parameter is employed to denote whether the
+session termination is due to a migration abort (1) or not (0). In the event of
+a session abort, the secure firmware on the source side may perform certain
+steps (e.g., in the TDX case, restore the states of the private pages that have
+been migrated) to ensure that the TD is re-migratable later.
+
 5. The kvm_run structure
 ========================
 

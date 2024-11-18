@@ -7820,3 +7820,9 @@ int kvm_mmu_import_private_pages(struct kvm *kvm, struct kvm_cgm_data *data,
 
 	return ret;
 }
+
+int kvm_mmu_restore_private_pages(struct kvm *kvm)
+{
+	/* To support later */
+	return 0;
+}
