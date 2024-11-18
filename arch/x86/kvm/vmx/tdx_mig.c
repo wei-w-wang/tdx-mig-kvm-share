@@ -179,6 +179,7 @@ struct tdx_mig_state {
 	hpa_t *migsc_paddrs;
 	hpa_t backward_migsc_paddr;
 	struct tdx_mig_stream stream;
+	struct tdx_mig_gpa_list blockw_gpa_list;
 };
 
 #define TDX_MIGTD_ATTR 0x000007ff00000000
@@ -271,6 +272,9 @@ static void tdx_mig_state_destroy(struct kvm_tdx *kvm_tdx)
 
 	if (!mig_state)
 		return;
+
+	if (mig_state->blockw_gpa_list.entries)
+		free_page((unsigned long)mig_state->blockw_gpa_list.entries);
 
 	if (mig_state->backward_migsc_paddr)
 		tdx_reclaim_control_page(mig_state->backward_migsc_paddr);
@@ -479,7 +483,25 @@ err_page_list:
 	return -ENOMEM;
 }
 
-static int tdx_mig_state_setup(struct kvm_tdx *kvm_tdx)
+static int tdx_mig_blockw_gpa_list_setup(struct tdx_mig_gpa_list *gpa_list)
+{
+	struct page *page;
+
+	/* Retained from the previous aborted session */
+	if (gpa_list->entries)
+		return 0;
+
+	page = alloc_page(GFP_KERNEL_ACCOUNT | __GFP_ZERO);
+	if (!page)
+		return -ENOMEM;
+
+	gpa_list->info.pfn = page_to_pfn(page);
+	gpa_list->entries = page_address(page);
+
+	return 0;
+}
+
+static int tdx_mig_state_setup(struct kvm_tdx *kvm_tdx, bool is_src)
 {
 	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
 	int i, ret;
@@ -490,6 +512,12 @@ static int tdx_mig_state_setup(struct kvm_tdx *kvm_tdx)
 
 	for (i = 0; i < mig_state->nr_streams; i++) {
 		ret = tdx_mig_stream_create(kvm_tdx, &mig_state->migsc_paddrs[i]);
+		if (ret)
+			return ret;
+	}
+
+	if (is_src) {
+		ret = tdx_mig_blockw_gpa_list_setup(&mig_state->blockw_gpa_list);
 		if (ret)
 			return ret;
 	}
@@ -672,7 +700,7 @@ int tdx_mig_prepare(struct kvm *kvm, struct kvm_cgm_prepare *prepare)
 	tdx_notify_migtd(migtd_tdx);
 
 	mig_state->is_src = prepare->is_src;
-	return tdx_mig_state_setup(usertd_tdx);
+	return tdx_mig_state_setup(usertd_tdx, prepare->is_src);
 }
 
 int tdx_mig_start(struct kvm *kvm, struct kvm_cgm_data *data)
