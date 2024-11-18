@@ -858,3 +858,30 @@ int tdx_mig_get_epoch_token(struct kvm *kvm, struct kvm_cgm_data *data)
 
 	return tdx_mig_stream_export_track(kvm_tdx, stream, data, false);
 }
+
+int tdx_mig_set_epoch_token(struct kvm *kvm, struct kvm_cgm_data *data)
+{
+	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
+	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
+	struct tdx_mig_stream *stream = &mig_state->stream;
+	union tdx_mig_stream_info stream_info = {.val = 0};
+	struct page *page;
+	uint64_t err;
+	int ret;
+
+	ret = pin_user_pages_unlocked(data->uaddr, 1, &page, FOLL_WRITE);
+	if (ret != 1)
+		return -ENOMEM;
+
+	tdx_mig_stream_mbmd_init(stream, page);
+
+	err = tdh_import_track(kvm_tdx->tdr_pa, stream->mbmd.addr_and_size,
+			       stream_info.val);
+	unpin_user_page(page);
+	if (err != TDX_SUCCESS) {
+		pr_err("Failed to import epoch token: %llx\n", err);
+		return -EIO;
+	}
+
+	return 0;
+}
