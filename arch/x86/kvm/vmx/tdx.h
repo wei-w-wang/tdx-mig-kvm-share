@@ -60,6 +60,7 @@ struct kvm_tdx {
 	atomic64_t nr_premapped;
 
 	struct tdx_binding_info *binding_info;
+	struct tdx_mig_state *mig_state;
 };
 
 /* TDX module vCPU states */

@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0
 
+#define TDX_MIG_MAX_STREAM_NR 1
+
+#define TDX_MIG_MBMD_NPAGES 1
+
+struct tdx_mig_state {
+	uint32_t nr_ubuf_pages;
+	uint32_t nr_streams;
+};
+
 #define TDX_MIGTD_ATTR 0x000007ff00000000
 
 /* A SHA384 hash takes up 48 bytes */
@@ -14,6 +23,61 @@
 
 /* Defined by the TDX ABI spec */
 #define TDX_SERVTD_TYPE_MIGTD		0
+
+int tdx_mig_enable_cap(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm)
+{
+	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
+	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
+	const struct tdx_sys_info_td_mig_cap *td_mig_cap =
+						&tdx_sysinfo->td_mig_cap;
+	unsigned int nr_immutable_pages, nr_vcpu_pages, nr_memory_pages;
+
+	nr_immutable_pages = td_mig_cap->immutable_state_pages +
+			     TDX_MIG_MBMD_NPAGES;
+	/* The first vcpu state is combined together with TD state data */
+	nr_vcpu_pages = td_mig_cap->vcpu_state_pages + TDX_MIG_MBMD_NPAGES +
+			td_mig_cap->td_state_pages + TDX_MIG_MBMD_NPAGES;
+	/* Plus 1 MBMD page, 1 GPA list page and 1 MAC list page */
+	nr_memory_pages = cap_cgm->nr_ubuf_pages + 3;
+
+	mig_state->nr_ubuf_pages = (uint32_t)max3(nr_immutable_pages,
+						  nr_vcpu_pages,
+						  nr_memory_pages);
+	mig_state->nr_streams = min(TDX_MIG_MAX_STREAM_NR,
+				    cap_cgm->nr_threads);
+	cap_cgm->nr_ubuf_pages = mig_state->nr_ubuf_pages;
+	cap_cgm->nr_threads = mig_state->nr_streams;
+
+	return 0;
+}
+
+static int tdx_mig_state_create(struct kvm_tdx *kvm_tdx)
+{
+	struct tdx_mig_state *mig_state;
+
+	if (kvm_tdx->mig_state) {
+		pr_warn("unexpected: mig_state already created\n");
+		return -EEXIST;
+	}
+
+	mig_state = kzalloc(sizeof(struct tdx_mig_state), GFP_KERNEL_ACCOUNT);
+	if (!mig_state)
+		return -ENOMEM;
+
+	kvm_tdx->mig_state = mig_state;
+	return 0;
+}
+
+static void tdx_mig_state_destroy(struct kvm_tdx *kvm_tdx)
+{
+	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
+
+	if (!mig_state)
+		return;
+
+	kfree(mig_state);
+	kvm_tdx->mig_state = NULL;
+}
 
 static int tdx_mig_prebind_migtd(struct kvm_tdx *kvm_tdx, void *hash)
 {

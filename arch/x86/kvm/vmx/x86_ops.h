@@ -163,6 +163,7 @@ void tdx_flush_tlb_all(struct kvm_vcpu *vcpu);
 void tdx_load_mmu_pgd(struct kvm_vcpu *vcpu, hpa_t root_hpa, int root_level);
 int tdx_gmem_private_max_mapping_level(struct kvm *kvm, kvm_pfn_t pfn);
 
+int tdx_mig_enable_cap(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm);
 int tdx_mig_prepare(struct kvm *kvm, struct kvm_cgm_prepare *prepare);
 #else
 static inline void tdx_disable_virtualization_cpu(void) {}
@@ -231,6 +232,11 @@ static inline void tdx_flush_tlb_current(struct kvm_vcpu *vcpu) {}
 static inline void tdx_flush_tlb_all(struct kvm_vcpu *vcpu) {}
 static inline void tdx_load_mmu_pgd(struct kvm_vcpu *vcpu, hpa_t root_hpa, int root_level) {}
 static inline int tdx_gmem_private_max_mapping_level(struct kvm *kvm, kvm_pfn_t pfn) { return 0; }
+
+static inline int tdx_mig_enable_cap(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm)
+{
+	return -EOPNOTSUPP;
+}
 
 static inline int tdx_mig_prepare(struct kvm *kvm,
 				  struct kvm_cgm_migration_prepare *prepare)

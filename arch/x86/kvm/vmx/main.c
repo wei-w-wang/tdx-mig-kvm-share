@@ -868,6 +868,14 @@ static void vt_gmem_release(struct kvm *kvm)
 	return tdx_mmu_release_hkid(kvm);
 }
 
+static int vt_cgm_enable_cap(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm)
+{
+	if (!is_td(kvm))
+		return -ENOTTY;
+
+	return tdx_mig_enable_cap(kvm, cap_cgm);
+}
+
 static int vt_cgm_prepare(struct kvm *kvm,
 			  struct kvm_cgm_prepare *prepare)
 {
@@ -1038,6 +1046,7 @@ struct kvm_x86_ops vt_x86_ops __initdata = {
 	.private_max_mapping_level = vt_gmem_private_max_mapping_level,
 	.gmem_release = vt_gmem_release,
 
+	.cgm_enable_cap = vt_cgm_enable_cap,
 	.cgm_prepare = vt_cgm_prepare,
 };
 
