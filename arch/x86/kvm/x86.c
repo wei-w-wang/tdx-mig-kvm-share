@@ -7423,6 +7423,24 @@ set_pit2_out:
 		r = static_call(kvm_x86_cgm_prepare)(kvm, &prepare);
 		break;
 	}
+	case KVM_CGM_START: {
+		struct kvm_cgm_data data;
+
+		r = -ENOTTY;
+		if (!kvm_x86_ops.cgm_start)
+			goto out;
+		r = -EFAULT;
+		if (copy_from_user(&data, argp, sizeof(data)))
+			goto out;
+		r = static_call(kvm_x86_cgm_start)(kvm, &data);
+		if (r)
+			goto out;
+		r = -EFAULT;
+		if (copy_to_user(argp, &data, sizeof(data)))
+			goto out;
+		r = 0;
+		break;
+	}
 	default:
 		r = -ENOTTY;
 	}

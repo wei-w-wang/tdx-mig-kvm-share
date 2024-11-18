@@ -6472,6 +6472,32 @@ confidential/secure guest. This is usually called before a live migration
 session starts, and the subsequent migration session should proceed only when 0
 is returned.
 
+4.144 KVM_CGM_START
+---------------------------------
+
+:Capability: KVM_CGM_CAP
+:Architectures: x86
+:Type: vm ioctl
+:Parameters: struct kvm_cgm_data (in/out)
+:Returns: 0 on success, < 0 on error
+
+::
+
+  struct kvm_cgm_data {
+        __u64 uaddr;
+        __u64 size; /* bytes */
+  };
+
+KVM_CGM_START is used by userspace to request the secure firmware (e.g. TDX
+module) via KVM to start a migration session. Depending on the secure firmware
+design, it may require to migrate some initialization data from the source to
+destination to do a preliminary initialization (e.g. TDX's immutable state
+export and import). Userspace provides a buffer via "struct kvm_cgm_data" to
+the secure firmware via KVM. On the source side, the buffer will be loaded with
+the initialization data on return of the ioctl. On the destination side, the
+buffer has been loaded with the initialization data received from the source
+and will be read by the secure firmware to do a preliminary initialization.
+
 5. The kvm_run structure
 ========================
 
