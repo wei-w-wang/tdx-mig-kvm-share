@@ -1772,6 +1772,9 @@ int tdx_sept_remove_private_spte(struct kvm *kvm, gfn_t gfn,
 	int ret;
 	u64 err;
 
+	if (to_kvm_tdx(kvm)->state == TD_STATE_UNINITIALIZED)
+		return 0;
+
 	/* Reclaim the page during TD teardown */
         if (!is_hkid_assigned(to_kvm_tdx(kvm))) {
                 err = tdx_reclaim_page(pfn_to_hpa(pfn));
