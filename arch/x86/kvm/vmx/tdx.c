@@ -3762,6 +3762,11 @@ static int __init __tdx_bringup(void)
 		goto get_sysinfo_err;
 	}
 
+	if (tdx_sysinfo->td_mig_cap.vcpu_state_pages)
+		pr_info("tdx: live migration supported\n");
+	else
+		pr_info("tdx: live migration isn't supported\n");
+
 	/*
 	 * Leave hardware virtualization enabled after TDX is enabled
 	 * successfully.  TDX CPU hotplug depends on this.

@@ -7,6 +7,11 @@
  * Include this file to other C file instead.
  */
 
+#define MD_FIELD_ID_MAX_MIGS			0xA000000100000010ULL
+#define MD_FIELD_ID_IMMUTABLE_STATE_PAGES	0xA000000000000020ULL
+#define MD_FIELD_ID_TD_STATE_PAGES		0xA000000000000021ULL
+#define MD_FIELD_ID_VP_STATE_PAGES		0xA000000000000022ULL
+
 static int get_tdx_sys_info_version(struct tdx_sys_info_version *sysinfo_version)
 {
 	int ret = 0;
@@ -120,6 +125,34 @@ static int get_tdx_sys_info_td_conf(struct tdx_sys_info_td_conf *sysinfo_td_conf
 	return ret;
 }
 
+static int get_tdx_sys_info_td_mig_cap(struct tdx_sys_info_td_mig_cap *td_mig_cap)
+{
+	uint64_t val;
+	int ret;
+
+	ret = read_sys_metadata_field(MD_FIELD_ID_MAX_MIGS, &val);
+	if (ret)
+		return ret;
+	td_mig_cap->max_migs = (u32)val;
+
+	ret = read_sys_metadata_field(MD_FIELD_ID_IMMUTABLE_STATE_PAGES, &val);
+	if (ret)
+		return ret;
+	td_mig_cap->immutable_state_pages = (u32)val;
+
+	ret = read_sys_metadata_field(MD_FIELD_ID_TD_STATE_PAGES, &val);
+	if (ret)
+		return ret;
+	td_mig_cap->td_state_pages = (u32)val;
+
+	ret = read_sys_metadata_field(MD_FIELD_ID_VP_STATE_PAGES, &val);
+	if (ret)
+		return ret;
+	td_mig_cap->vcpu_state_pages = (u32)val;
+
+	return 0;
+}
+
 static int get_tdx_sys_info(struct tdx_sys_info *sysinfo)
 {
 	int ret = 0;
@@ -130,6 +163,7 @@ static int get_tdx_sys_info(struct tdx_sys_info *sysinfo)
 	ret = ret ?: get_tdx_sys_info_cmr(&sysinfo->cmr);
 	ret = ret ?: get_tdx_sys_info_td_ctrl(&sysinfo->td_ctrl);
 	ret = ret ?: get_tdx_sys_info_td_conf(&sysinfo->td_conf);
+	ret = ret ?: get_tdx_sys_info_td_mig_cap(&sysinfo->td_mig_cap);
 
 	return ret;
 }

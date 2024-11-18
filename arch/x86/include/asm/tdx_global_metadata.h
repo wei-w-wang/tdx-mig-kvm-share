@@ -49,6 +49,13 @@ struct tdx_sys_info_td_conf {
 	u64 cpuid_config_values[32][2];
 };
 
+struct tdx_sys_info_td_mig_cap {
+	u32 max_migs;
+	u32 immutable_state_pages;
+	u32 td_state_pages;
+	u32 vcpu_state_pages;
+};
+
 struct tdx_sys_info {
 	struct tdx_sys_info_version version;
 	struct tdx_sys_info_features features;
@@ -56,6 +63,7 @@ struct tdx_sys_info {
 	struct tdx_sys_info_cmr cmr;
 	struct tdx_sys_info_td_ctrl td_ctrl;
 	struct tdx_sys_info_td_conf td_conf;
+	struct tdx_sys_info_td_mig_cap td_mig_cap;
 };
 
 #endif
