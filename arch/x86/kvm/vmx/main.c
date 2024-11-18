@@ -935,6 +935,15 @@ static int vt_cgm_get_memory_state(struct kvm *kvm, gfn_t *gfns, uint16_t gfn_nu
 	return tdx_mig_get_memory_state(kvm, gfns, gfn_num, data);
 }
 
+static int vt_cgm_set_memory_state(struct kvm *kvm, struct kvm_cgm_data *data,
+				   struct kvm_import_private_pages *pages)
+{
+	if (!is_td(kvm))
+		return -ENOTTY;
+
+	return tdx_mig_set_memory_state(kvm, data, pages);
+}
+
 #define VMX_REQUIRED_APICV_INHIBITS				\
 	(BIT(APICV_INHIBIT_REASON_DISABLED) |			\
 	 BIT(APICV_INHIBIT_REASON_ABSENT) |			\
@@ -1103,6 +1112,7 @@ struct kvm_x86_ops vt_x86_ops __initdata = {
 	.cgm_get_epoch_token = vt_cgm_get_epoch_token,
 	.cgm_set_epoch_token = vt_cgm_set_epoch_token,
 	.cgm_get_memory_state = vt_cgm_get_memory_state,
+	.cgm_set_memory_state = vt_cgm_set_memory_state,
 };
 
 struct kvm_x86_init_ops vt_init_ops __initdata = {
