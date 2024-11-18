@@ -1905,6 +1905,7 @@ struct kvm_x86_ops {
 					 uint32_t num);
 	int (*write_unblock_private_page)(struct kvm *kvm, gfn_t gfn,
 					  int level);
+	int (*restore_private_page)(struct kvm *kvm, gfn_t gfn);
 
 	int (*cgm_enable_cap)(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm);
 	int (*cgm_prepare)(struct kvm *kvm, struct kvm_cgm_prepare *prepare);

@@ -7823,6 +7823,9 @@ int kvm_mmu_import_private_pages(struct kvm *kvm, struct kvm_cgm_data *data,
 
 int kvm_mmu_restore_private_pages(struct kvm *kvm)
 {
-	/* To support later */
-	return 0;
+	if (!tdp_mmu_enabled)
+		return -EOPNOTSUPP;
+
+	return kvm_tdp_mmu_restore_private_pages(kvm);
 }
+EXPORT_SYMBOL_GPL(kvm_mmu_restore_private_pages);
