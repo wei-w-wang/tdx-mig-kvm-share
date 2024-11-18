@@ -2163,3 +2163,13 @@ u64 tdh_import_mem(u64 tdr, u64 mbmd_info, u64 gpa_list_info,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(tdh_import_mem);
+
+u64 tdh_export_pasue(u64 tdr)
+{
+	struct tdx_module_args args = {
+		.rcx = tdr,
+	};
+
+	return seamcall(TDH_EXPORT_PAUSE, &args);
+}
+EXPORT_SYMBOL_GPL(tdh_export_pasue);
