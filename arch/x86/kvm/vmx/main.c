@@ -926,6 +926,15 @@ static int vt_cgm_set_epoch_token(struct kvm *kvm, struct kvm_cgm_data *data)
 	return tdx_mig_set_epoch_token(kvm, data);
 }
 
+static int vt_cgm_get_memory_state(struct kvm *kvm, gfn_t *gfns, uint16_t gfn_num,
+				   struct kvm_cgm_data *data)
+{
+	if (!is_td(kvm))
+		return -ENOTTY;
+
+	return tdx_mig_get_memory_state(kvm, gfns, gfn_num, data);
+}
+
 #define VMX_REQUIRED_APICV_INHIBITS				\
 	(BIT(APICV_INHIBIT_REASON_DISABLED) |			\
 	 BIT(APICV_INHIBIT_REASON_ABSENT) |			\
@@ -1093,6 +1102,7 @@ struct kvm_x86_ops vt_x86_ops __initdata = {
 	.cgm_start = vt_cgm_start,
 	.cgm_get_epoch_token = vt_cgm_get_epoch_token,
 	.cgm_set_epoch_token = vt_cgm_set_epoch_token,
+	.cgm_get_memory_state = vt_cgm_get_memory_state,
 };
 
 struct kvm_x86_init_ops vt_init_ops __initdata = {
