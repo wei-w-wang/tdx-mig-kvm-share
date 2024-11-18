@@ -2257,3 +2257,15 @@ u64 tdh_import_end(u64 tdr)
 	return seamcall(TDH_IMPORT_END, &args);
 }
 EXPORT_SYMBOL_GPL(tdh_import_end);
+
+u64 tdh_export_abort(u64 tdr, u64 mbmd_info, u64 mig_stream_info)
+{
+	struct tdx_module_args args = {
+		.rcx = tdr,
+		.r8 = mbmd_info,
+		.r10 = mig_stream_info,
+	};
+
+	return seamcall(TDH_EXPORT_ABORT, &args);
+}
+EXPORT_SYMBOL_GPL(tdh_export_abort);
