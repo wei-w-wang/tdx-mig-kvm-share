@@ -2107,3 +2107,13 @@ u64 tdh_import_track(u64 tdr, u64 mbmd_info, u64 mig_stream_info)
 	return seamcall(TDH_IMPORT_TRACK, &args);
 }
 EXPORT_SYMBOL_GPL(tdh_import_track);
+
+u64 tdh_import_commit(u64 tdr)
+{
+	struct tdx_module_args args = {
+		.rcx = tdr,
+	};
+
+	return seamcall(TDH_IMPORT_COMMIT, &args);
+}
+EXPORT_SYMBOL_GPL(tdh_import_commit);
