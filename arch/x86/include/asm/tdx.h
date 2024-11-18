@@ -196,6 +196,8 @@ u64 tdh_export_state_immutable(u64 tdr, u64 mbmd_info, u64 page_list_info,
 			       u64 mig_stream_info, u64 *rdx);
 u64 tdh_import_state_immutable(u64 tdr, u64 mbmd_info, u64 page_list_info,
 			       u64 mig_stream_info, u64 *rcx, u64 *rdx);
+u64 tdh_export_blockw(u64 tdr, u64 gpa_list_info, u64 *rcx);
+u64 tdh_export_unblockw(u64 tdr, u64 ept_info, u64 *rcx, u64 *rdx);
 #else
 static inline void tdx_init(void) { }
 static inline int tdx_cpu_enable(void) { return -ENODEV; }

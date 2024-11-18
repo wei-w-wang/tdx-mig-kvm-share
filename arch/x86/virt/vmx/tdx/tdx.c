@@ -2052,3 +2052,34 @@ u64 tdh_import_state_immutable(u64 tdr, u64 mbmd_info, u64 page_list_info,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(tdh_import_state_immutable);
+
+u64 tdh_export_blockw(u64 tdr, u64 gpa_list_info, u64 *rcx)
+{
+	struct tdx_module_args args = {
+		.rcx = gpa_list_info,
+		.rdx = tdr,
+	};
+	u64 ret;
+
+	ret = seamcall_ret(TDH_EXPORT_BLOCKW, &args);
+	*rcx = args.rcx;
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(tdh_export_blockw);
+
+u64 tdh_export_unblockw(u64 tdr, u64 ept_info, u64 *rcx, u64 *rdx)
+{
+	struct tdx_module_args args = {
+		.rcx = ept_info,
+		.rdx = tdr,
+	};
+	u64 ret;
+
+	ret = seamcall_ret(TDH_EXPORT_UNBLOCKW, &args);
+	*rcx = args.rcx;
+	*rdx = args.rdx;
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(tdh_export_unblockw);
