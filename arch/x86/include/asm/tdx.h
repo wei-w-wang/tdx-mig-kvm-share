@@ -191,6 +191,7 @@ u64 tdh_servtd_bind(u64 servtd_tdr, u64 target_tdr, u64 slot_idx,
 		    u64 *r12, u64 *r13);
 u64 tdh_servtd_prebind(u64 target_tdr, u64 hash_addr, u64 slot_idx, u64 attr,
 		       enum kvm_tdx_servtd_type type);
+u64 tdh_mig_stream_create(u64 tdr, u64 migsc);
 #else
 static inline void tdx_init(void) { }
 static inline int tdx_cpu_enable(void) { return -ENODEV; }

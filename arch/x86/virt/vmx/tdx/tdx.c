@@ -2005,7 +2005,7 @@ u64 tdh_servtd_prebind(u64 target_tdr, u64 hash_addr, u64 slot_idx, u64 attr,
 }
 EXPORT_SYMBOL_GPL(tdh_servtd_prebind);
 
-u64 tdh_mig_stream_create(hpa_t tdr, hpa_t migsc)
+u64 tdh_mig_stream_create(u64 tdr, u64 migsc)
 {
 	struct tdx_module_args args = {
 		.rcx = migsc,
