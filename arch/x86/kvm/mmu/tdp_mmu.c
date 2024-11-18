@@ -1746,6 +1746,10 @@ static void clear_dirty_pt_masked(struct kvm *kvm, struct kvm_mmu_page *root,
 		if (!(iter.old_spte & dbit))
 			continue;
 
+		if (is_mirror_sptep(iter.sptep) &&
+		    static_call(kvm_x86_write_block_private_pages)(kvm, (gfn_t *)&iter.gfn, 1))
+			continue;
+
 		iter.old_spte = tdp_mmu_clear_spte_bits(iter.sptep,
 							iter.old_spte, dbit,
 							iter.level);

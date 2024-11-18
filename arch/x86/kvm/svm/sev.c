@@ -4952,3 +4952,8 @@ int sev_private_max_mapping_level(struct kvm *kvm, kvm_pfn_t pfn)
 
 	return level;
 }
+
+int sev_write_block_private_pages(struct kvm *kvm, gfn_t *gfns, uint32_t num)
+{
+	return -EOPNOTSUPP;
+}

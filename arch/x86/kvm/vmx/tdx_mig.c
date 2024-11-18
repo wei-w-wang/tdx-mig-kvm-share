@@ -226,6 +226,11 @@ int tdx_mig_enable_cap(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm)
 	return 0;
 }
 
+int tdx_write_block_private_pages(struct kvm *kvm, gfn_t *gfns, uint32_t num)
+{
+	return -EOPNOTSUPP;
+}
+
 static int tdx_mig_state_create(struct kvm_tdx *kvm_tdx)
 {
 	const struct tdx_sys_info_td_mig_cap *td_mig_cap =

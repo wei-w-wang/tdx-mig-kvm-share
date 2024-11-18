@@ -58,6 +58,7 @@ static __init int vt_hardware_setup(void)
 		vt_x86_ops.set_external_spte = tdx_sept_set_private_spte;
 		vt_x86_ops.free_external_spt = tdx_sept_free_private_spt;
 		vt_x86_ops.remove_external_spte = tdx_sept_remove_private_spte;
+		vt_x86_ops.write_block_private_pages = tdx_write_block_private_pages;
 	} else {
 		vt_x86_ops.protected_apic_has_interrupt = NULL;
 	}

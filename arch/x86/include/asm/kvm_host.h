@@ -1880,6 +1880,9 @@ struct kvm_x86_ops {
 	void (*gmem_release)(struct kvm *kvm);
 	int (*private_max_mapping_level)(struct kvm *kvm, kvm_pfn_t pfn);
 
+	int (*write_block_private_pages)(struct kvm *kvm, gfn_t *gfns,
+					 uint32_t num);
+
 	int (*cgm_enable_cap)(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm);
 	int (*cgm_prepare)(struct kvm *kvm, struct kvm_cgm_prepare *prepare);
 	int (*cgm_start)(struct kvm *kvm, struct kvm_cgm_data *data);
