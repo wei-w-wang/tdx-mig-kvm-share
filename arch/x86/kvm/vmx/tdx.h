@@ -24,6 +24,7 @@ enum kvm_tdx_state {
 struct tdx_binding_info {
 	/* Is the source side MigTD */
 	bool is_src;
+	atomic_t migration_prepare_done;
 	/* Number of users of the binding_info memory */
 	refcount_t users_count;
 	/* Identify the user TD and the binding slot */

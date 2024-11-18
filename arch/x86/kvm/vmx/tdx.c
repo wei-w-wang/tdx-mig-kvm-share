@@ -1728,7 +1728,8 @@ static int migtd_wait_for_request(struct kvm_tdx *kvm_tdx,
 	int len = sizeof(struct tdvmcall_service_migtd);
 	struct tdx_binding_info *binding_info = kvm_tdx->binding_info;
 
-	if (!binding_info) {
+	if (!binding_info ||
+	    atomic_read(&binding_info->migration_prepare_done)) {
 		resp_migtd->operation = TDVMCALL_SERVICE_MIGTD_OP_NOOP;
 		*need_block = true;
 		return len;
@@ -1742,12 +1743,15 @@ static int migtd_wait_for_request(struct kvm_tdx *kvm_tdx,
 static void migtd_report_status_for_start_mig(struct kvm_tdx *kvm_tdx,
 				struct tdvmcall_service_migtd *cmd_migtd)
 {
+	struct tdx_binding_info *binding_info = kvm_tdx->binding_info;
+
 	if (cmd_migtd->status != TDVMCALL_SERVICE_MIGTD_STATUS_SUCC) {
 		pr_err("Migration preparation failed, status=%x\n",
 			cmd_migtd->status);
 	} else {
 		pr_info("Migration preparation is done, userspace pid=%d\n",
 			 kvm_tdx->kvm.userspace_pid);
+		atomic_set(&binding_info->migration_prepare_done, 1);
 	}
 }
 
