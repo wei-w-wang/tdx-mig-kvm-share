@@ -603,7 +603,8 @@ static int tdx_mig_import_state_immutable(struct kvm_tdx *kvm_tdx,
 		return -EIO;
 	}
 
-	return 0;
+	kvm_tdx->kvm.arch.pre_fault_allowed = true;
+	return kvm_pre_fault_private_memory_nonleaf_all(&kvm_tdx->kvm);
 }
 
 static int tdx_mig_export_state_immutable(struct kvm_tdx *kvm_tdx,

@@ -2577,4 +2577,13 @@ static inline int kvm_enable_virtualization(void) { return 0; }
 static inline void kvm_disable_virtualization(void) { }
 #endif
 
+#if defined(CONFIG_KVM_GENERIC_PRE_FAULT_MEMORY) && defined(CONFIG_KVM_PRIVATE_MEM)
+int kvm_pre_fault_private_memory_nonleaf_all(struct kvm *kvm);
+#else
+static inline int kvm_pre_fault_private_memory_nonleaf_all(struct kvm *kvm)
+{
+	return -EOPNOTSUPP;
+}
+#endif
+
 #endif

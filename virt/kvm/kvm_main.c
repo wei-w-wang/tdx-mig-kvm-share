@@ -2476,8 +2476,8 @@ static bool kvm_pre_set_memory_attributes(struct kvm *kvm,
 }
 
 /* Set @attributes for the gfn range [@start, @end). */
-static int kvm_vm_set_mem_attributes(struct kvm *kvm, gfn_t start, gfn_t end,
-				     unsigned long attributes)
+static int __kvm_vm_set_mem_attributes(struct kvm *kvm, gfn_t start, gfn_t end,
+				       unsigned long attributes)
 {
 	struct kvm_mmu_notifier_range pre_set_range = {
 		.start = start,
@@ -2502,11 +2502,9 @@ static int kvm_vm_set_mem_attributes(struct kvm *kvm, gfn_t start, gfn_t end,
 
 	entry = attributes ? xa_mk_value(attributes) : NULL;
 
-	mutex_lock(&kvm->slots_lock);
-
 	/* Nothing to do if the entire range as the desired attributes. */
 	if (kvm_range_has_memory_attributes(kvm, start, end, ~0, attributes))
-		goto out_unlock;
+		return r;
 
 	/*
 	 * Reserve memory ahead of time to avoid having to deal with failures
@@ -2515,7 +2513,7 @@ static int kvm_vm_set_mem_attributes(struct kvm *kvm, gfn_t start, gfn_t end,
 	for (i = start; i < end; i++) {
 		r = xa_reserve(&kvm->mem_attr_array, i, GFP_KERNEL_ACCOUNT);
 		if (r)
-			goto out_unlock;
+			return r;
 	}
 
 	kvm_handle_gfn_range(kvm, &pre_set_range);
@@ -2528,11 +2526,21 @@ static int kvm_vm_set_mem_attributes(struct kvm *kvm, gfn_t start, gfn_t end,
 
 	kvm_handle_gfn_range(kvm, &post_set_range);
 
-out_unlock:
-	mutex_unlock(&kvm->slots_lock);
-
 	return r;
 }
+
+static int kvm_vm_set_mem_attributes(struct kvm *kvm, gfn_t start, gfn_t end,
+				     unsigned long attributes)
+{
+	int ret;
+
+	mutex_lock(&kvm->slots_lock);
+	ret = __kvm_vm_set_mem_attributes(kvm, start, end, attributes);
+	mutex_unlock(&kvm->slots_lock);
+
+	return ret;
+}
+
 static int kvm_vm_ioctl_set_mem_attributes(struct kvm *kvm,
 					   struct kvm_memory_attributes *attrs)
 {
@@ -4286,6 +4294,48 @@ static int kvm_vcpu_pre_fault_memory(struct kvm_vcpu *vcpu,
 	/* Return success if at least one page was mapped successfully.  */
 	return full_size == range->size ? r : 0;
 }
+
+#ifdef CONFIG_KVM_PRIVATE_MEM
+int kvm_pre_fault_private_memory_nonleaf_all(struct kvm *kvm)
+{
+	struct kvm_memslots *slots;
+	struct kvm_vcpu *vcpu = kvm_get_vcpu(kvm, 0);
+	struct kvm_pre_fault_memory range;
+	struct kvm_memory_slot *memslot;
+	int bkt, ret = 0;
+
+	mutex_lock(&kvm->slots_lock);
+
+	slots  = kvm_memslots(kvm);
+	range.flags = KVM_PRE_FAULT_MEMORY_F_NOLEAF;
+	kvm_for_each_memslot(memslot, bkt, slots) {
+		if (!(memslot->flags & KVM_MEM_GUEST_MEMFD))
+			continue;
+
+		range.gpa = gfn_to_gpa(memslot->base_gfn);
+		range.size = memslot->npages * PAGE_SIZE;
+		ret = __kvm_vm_set_mem_attributes(kvm, memslot->base_gfn,
+						memslot->base_gfn + memslot->npages,
+						KVM_MEMORY_ATTRIBUTE_PRIVATE);
+		if (ret) {
+			printk("%s: Failed to set slot memory to private: %d\n",
+			       __func__, ret);
+			break;
+		}
+		ret = kvm_vcpu_pre_fault_memory(vcpu, &range);
+		if (ret) {
+			printk("%s: Failed to pre_fault slot memory:%d\n",
+			       __func__, ret);
+			break;
+		}
+	}
+
+	mutex_unlock(&kvm->slots_lock);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(kvm_pre_fault_private_memory_nonleaf_all);
+#endif
+
 #endif
 
 static long kvm_vcpu_ioctl(struct file *filp,
