@@ -766,7 +766,7 @@ static int tdx_mig_stream_state_buffer_init(struct tdx_mig_stream *stream,
 	int ret;
 
 	memset(pages, 0, total_pages * sizeof(struct page *));
-	ret = pin_user_pages(uaddr, total_pages, FOLL_WRITE, pages);
+	ret = pin_user_pages_unlocked(uaddr, total_pages, pages, FOLL_WRITE);
 	if (ret != total_pages) {
 		unpin_user_pages(pages, ret);
 		return -ENOMEM;
@@ -927,7 +927,7 @@ static int tdx_mig_stream_export_track(struct kvm_tdx *kvm_tdx,
 	uint64_t err;
 	int ret;
 
-	ret = pin_user_pages(data->uaddr + data->size, 1, FOLL_WRITE, &page);
+	ret = pin_user_pages_unlocked(data->uaddr + data->size, 1, &page, FOLL_WRITE);
 	if (ret != 1)
 		return -ENOMEM;
 
@@ -965,7 +965,7 @@ int tdx_mig_set_epoch_token(struct kvm *kvm, struct kvm_cgm_data *data)
 	uint64_t err;
 	int ret;
 
-	ret = pin_user_pages(data->uaddr, 1, FOLL_WRITE, &page);
+	ret = pin_user_pages_unlocked(data->uaddr, 1, &page, FOLL_WRITE);
 	if (ret != 1)
 		return -ENOMEM;
 
@@ -993,7 +993,7 @@ static int tdx_mig_stream_memory_buffer_init(struct tdx_mig_stream *stream,
 	long ret;
 
 	memset(pages, 0, total_pages * sizeof(struct page *));
-	ret = pin_user_pages(uaddr, total_pages, FOLL_WRITE, pages);
+	ret = pin_user_pages_unlocked(uaddr, total_pages, pages, FOLL_WRITE);
 	if (ret != total_pages) {
 		unpin_user_pages(pages, ret);
 		return -ENOMEM;
@@ -1198,7 +1198,7 @@ static int set_memory_buffer_setup(struct tdx_mig_stream *stream,
 	long ret;
 
 	memset(pages, 0, state_page_nr * sizeof(struct page *));
-	ret = pin_user_pages(data->uaddr, state_page_nr, FOLL_WRITE, pages);
+	ret = pin_user_pages_unlocked(data->uaddr, state_page_nr, pages, FOLL_WRITE);
 	if (ret != state_page_nr) {
 		unpin_user_pages(pages, ret);
 		return -ENOMEM;

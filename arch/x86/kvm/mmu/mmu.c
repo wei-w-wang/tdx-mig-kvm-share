@@ -4868,6 +4868,7 @@ kvm_slot_prealloc_private_pages(struct kvm *kvm,
 	vcpu_load(vcpu);
 
 	idx = srcu_read_lock(&kvm->srcu);
+
 	ret = kvm_slot_prealloc_set_mem_attributes(kvm, &gfn_range);
 	if (ret)
 		return ret;
