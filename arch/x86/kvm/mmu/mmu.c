@@ -4844,7 +4844,7 @@ static int
 kvm_slot_prealloc_private_pages(struct kvm *kvm,
 				struct kvm_memory_slot *memslot, bool nonleaf)
 {
-	int idx, ret = 0;
+	int ret = 0;
 	struct kvm_vcpu *vcpu = kvm_get_vcpu(kvm, 0);
 	unsigned long npages = memslot->npages;
 	struct kvm_gfn_range gfn_range = {
@@ -4867,8 +4867,6 @@ kvm_slot_prealloc_private_pages(struct kvm *kvm,
 
 	vcpu_load(vcpu);
 
-	idx = srcu_read_lock(&kvm->srcu);
-
 	ret = kvm_slot_prealloc_set_mem_attributes(kvm, &gfn_range);
 	if (ret)
 		return ret;
@@ -4881,8 +4879,10 @@ kvm_slot_prealloc_private_pages(struct kvm *kvm,
 
 		if (need_resched())
 			cond_resched();
+		read_lock(&kvm->mmu_lock);
 		ret = kvm_mmu_map_tdp_page(vcpu, gpa, error_code,
 					   PG_LEVEL_4K, nonleaf);
+		read_unlock(&kvm->mmu_lock);
 		if (ret || kvm->vm_bugged) {
 			pr_err("%s: failed, ret=%d, vm_bugged=%d\n",
 				__func__, ret, kvm->vm_bugged);
@@ -4897,7 +4897,6 @@ kvm_slot_prealloc_private_pages(struct kvm *kvm,
 		gfn_range.arg.attributes = 0;
 		ret = kvm_slot_prealloc_set_mem_attributes(kvm, &gfn_range);
 	}
-	srcu_read_unlock(&kvm->srcu, idx);
 
 	vcpu_put(vcpu);
 	mutex_unlock(&vcpu->mutex);
@@ -4908,9 +4907,9 @@ kvm_slot_prealloc_private_pages(struct kvm *kvm,
 int kvm_prealloc_private_pages(struct kvm *kvm, bool nonleaf)
 {
 	struct kvm_memory_slot *memslot;
-	struct kvm_memslots *slots = kvm_memslots(kvm);
+	struct kvm_memslots *slots;
 	struct kvm_vcpu *vcpu = kvm_get_vcpu(kvm, 0);
-	int bkt, ret = 0;
+	int idx, bkt, ret = 0;
 
 	ret = mmu_topup_memory_caches(vcpu, !vcpu->arch.mmu->root_role.direct);
 	if (ret)
@@ -4918,6 +4917,8 @@ int kvm_prealloc_private_pages(struct kvm *kvm, bool nonleaf)
         vcpu->arch.mmu->private_root_hpa =
 				kvm_tdp_mmu_get_vcpu_root_hpa(vcpu, true);
 
+	idx = srcu_read_lock(&kvm->srcu);
+	slots = kvm_memslots(kvm);
 	kvm_for_each_memslot(memslot, bkt, slots) {
 		if (!(memslot->flags & KVM_MEM_GUEST_MEMFD))
 			continue;
@@ -4928,6 +4929,7 @@ int kvm_prealloc_private_pages(struct kvm *kvm, bool nonleaf)
 			break;
 		}
 	}
+	srcu_read_unlock(&kvm->srcu, idx);
 
 	return ret;
 }
