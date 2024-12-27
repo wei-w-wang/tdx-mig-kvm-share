@@ -7842,10 +7842,16 @@ void kvm_mmu_init_memslot_memory_attributes(struct kvm *kvm,
 int kvm_mmu_import_private_pages(struct kvm *kvm, struct kvm_cgm_data *data,
 				 struct kvm_import_private_pages *pages)
 {
+	int idx, ret;
+
 	if (!tdp_mmu_enabled)
 		return -EOPNOTSUPP;
 
-	return kvm_tdp_mmu_import_private_pages(kvm, data, pages);
+	idx = srcu_read_lock(&kvm->srcu);
+	ret = kvm_tdp_mmu_import_private_pages(kvm, data, pages);
+	srcu_read_unlock(&kvm->srcu, idx);
+
+	return ret;
 }
 
 int kvm_mmu_restore_private_pages(struct kvm *kvm)
