@@ -761,10 +761,33 @@ void tdx_vcpu_put(struct kvm_vcpu *vcpu)
 	tdx_prepare_switch_to_host(vcpu);
 }
 
+static void tdx_vcpu_free_tdcx(struct vcpu_tdx *tdx)
+{
+	int i;
+
+	if (!tdx->tdvpx_pa)
+		return;
+
+	for (i = 0; i < tdx_info->nr_tdvpx_pages; i++) {
+		if (tdx->tdvpx_pa[i])
+			tdx_reclaim_control_page(tdx->tdvpx_pa[i]);
+	}
+	kfree(tdx->tdvpx_pa);
+	tdx->tdvpx_pa = NULL;
+}
+
+static void tdx_vcpu_free_tdvpr(struct vcpu_tdx *tdx)
+{
+	if (!tdx->tdvpr_pa)
+		return;
+
+	tdx_reclaim_control_page(tdx->tdvpr_pa);
+	tdx->tdvpr_pa = 0;
+}
+
 void tdx_vcpu_free(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_tdx *tdx = to_tdx(vcpu);
-	int i;
 
 	/*
 	 * When destroying VM, kvm_unload_vcpu_mmu() calls vcpu_load() for every
@@ -787,18 +810,8 @@ void tdx_vcpu_free(struct kvm_vcpu *vcpu)
 		return;
 	}
 
-	if (tdx->tdvpx_pa) {
-		for (i = 0; i < tdx_info->nr_tdvpx_pages; i++) {
-			if (tdx->tdvpx_pa[i])
-				tdx_reclaim_control_page(tdx->tdvpx_pa[i]);
-		}
-		kfree(tdx->tdvpx_pa);
-		tdx->tdvpx_pa = NULL;
-	}
-	if (tdx->tdvpr_pa) {
-		tdx_reclaim_control_page(tdx->tdvpr_pa);
-		tdx->tdvpr_pa = 0;
-	}
+	tdx_vcpu_free_tdcx(tdx);
+	tdx_vcpu_free_tdvpr(tdx);
 
 	tdx->initialized = false;
 }
