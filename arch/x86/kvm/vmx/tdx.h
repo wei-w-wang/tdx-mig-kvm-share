@@ -8,6 +8,17 @@
 #include "pmu_intel.h"
 #include "tdx_ops.h"
 
+struct tdx_binding_info {
+	/* Is the source side MigTD */
+	bool is_src;
+	/* Number of users of the binding_info memory */
+	refcount_t users_count;
+	/* Identify the user TD and the binding slot */
+	uint64_t handle;
+	/* UUID of the user TD */
+	uint8_t  uuid[32];
+};
+
 struct kvm_tdx {
 	struct kvm kvm;
 
@@ -42,6 +53,8 @@ struct kvm_tdx {
 	/* For KVM_MEMORY_MAPPING */
 	struct mutex source_lock;
 	struct page *source_page;
+
+	struct tdx_binding_info *binding_info;
 };
 
 union tdx_exit_reason {
