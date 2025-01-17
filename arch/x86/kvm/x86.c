@@ -7287,6 +7287,20 @@ set_pit2_out:
 		r = kvm_vm_ioctl_set_msr_filter(kvm, &filter);
 		break;
 	}
+	case KVM_CGM_PREPARE: {
+		struct kvm_cgm_prepare prepare;
+
+		r = -EFAULT;
+		if (copy_from_user(&prepare, argp, sizeof(prepare)))
+			goto out;
+
+		r = -ENOTTY;
+		if (!kvm_x86_ops.cgm_prepare)
+			goto out;
+
+		r = static_call(kvm_x86_cgm_prepare)(kvm, &prepare);
+		break;
+	}
 	default:
 		r = -ENOTTY;
 	}

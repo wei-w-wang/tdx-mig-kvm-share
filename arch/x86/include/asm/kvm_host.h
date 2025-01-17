@@ -1851,6 +1851,8 @@ struct kvm_x86_ops {
 	void (*post_memory_mapping)(struct kvm_vcpu *vcpu,
 				    struct kvm_memory_mapping *mapping);
 	void (*gmem_release)(struct kvm *kvm);
+
+	int (*cgm_prepare)(struct kvm *kvm, struct kvm_cgm_prepare *prepare);
 };
 
 struct kvm_x86_nested_ops {

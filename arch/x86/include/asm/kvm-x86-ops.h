@@ -159,6 +159,7 @@ KVM_X86_OP_OPTIONAL_RET0(gmem_max_level)
 KVM_X86_OP_OPTIONAL(gmem_release)
 KVM_X86_OP_OPTIONAL(pre_memory_mapping);
 KVM_X86_OP_OPTIONAL(post_memory_mapping);
+KVM_X86_OP_OPTIONAL(cgm_prepare)
 
 #undef KVM_X86_OP
 #undef KVM_X86_OP_OPTIONAL
