@@ -2482,6 +2482,10 @@ static inline bool kvm_mem_is_private(struct kvm *kvm, gfn_t gfn)
 }
 #endif /* CONFIG_KVM_GENERIC_MEMORY_ATTRIBUTES */
 
+#ifdef CONFIG_HAVE_KVM_ARCH_GMEM_RELEASE
+void kvm_arch_gmem_release(struct kvm *kvm);
+#endif
+
 #ifdef CONFIG_KVM_PRIVATE_MEM
 int kvm_gmem_get_pfn(struct kvm *kvm, struct kvm_memory_slot *slot,
 		     gfn_t gfn, kvm_pfn_t *pfn, int *max_order);

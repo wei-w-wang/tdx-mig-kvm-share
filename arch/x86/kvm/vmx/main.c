@@ -1024,6 +1024,14 @@ static void vt_post_memory_mapping(struct kvm_vcpu *vcpu,
 	tdx_post_memory_mapping(vcpu, mapping);
 }
 
+static void vt_gmem_release(struct kvm *kvm)
+{
+	if (!is_td(kvm))
+		return;
+
+	return tdx_mmu_release_hkid(kvm);
+}
+
 #define VMX_REQUIRED_APICV_INHIBITS				\
 	(BIT(APICV_INHIBIT_REASON_DISABLE)|			\
 	 BIT(APICV_INHIBIT_REASON_ABSENT) |			\
@@ -1191,6 +1199,7 @@ struct kvm_x86_ops vt_x86_ops __initdata = {
 	.vcpu_mem_enc_ioctl = vt_vcpu_mem_enc_ioctl,
 
 	.gmem_max_level = vt_gmem_max_level,
+	.gmem_release = vt_gmem_release,
 	.pre_memory_mapping = vt_pre_memory_mapping,
 	.post_memory_mapping = vt_post_memory_mapping,
 };
