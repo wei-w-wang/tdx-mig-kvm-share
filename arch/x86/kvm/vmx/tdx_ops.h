@@ -61,36 +61,6 @@ static inline void tdx_clflush_page(hpa_t addr, enum pg_level level)
 	clflush_cache_range(__va(addr), KVM_HPAGE_SIZE(level));
 }
 
-/*
- * TDX module acquires its internal lock for resources.  It doesn't spin to get
- * locks because of its restrictions of allowed execution time.  Instead, it
- * returns TDX_OPERAND_BUSY with an operand id.
- *
- * Multiple VCPUs can operate on SEPT.  Also with zero-step attack mitigation,
- * TDH.VP.ENTER may rarely acquire SEPT lock and release it when zero-step
- * attack is suspected.  It results in TDX_OPERAND_BUSY | TDX_OPERAND_ID_SEPT
- * with TDH.MEM.* operation.  Note: TDH.MEM.TRACK is an exception.
- *
- * Because TDP MMU uses read lock for scalability, spin lock around SEAMCALL
- * spoils TDP MMU effort.  Retry several times with the assumption that SEPT
- * lock contention is rare.  But don't loop forever to avoid lockup.  Let TDP
- * MMU retry.
- */
-#define TDX_ERROR_SEPT_BUSY    (TDX_OPERAND_BUSY | TDX_OPERAND_ID_SEPT)
-
-static inline u64 tdx_seamcall_sept(u64 op, struct tdx_module_args *in,
-				    struct tdx_module_args *out)
-{
-#define SEAMCALL_RETRY_MAX     16
-	int retry = SEAMCALL_RETRY_MAX;
-	u64 ret;
-
-	do {
-		ret = tdx_seamcall(op, in, out);
-	} while (ret == TDX_ERROR_SEPT_BUSY && retry-- > 0);
-	return ret;
-}
-
 static inline u64 tdh_mng_addcx(hpa_t tdr, hpa_t addr)
 {
 	struct tdx_module_args in = {
@@ -114,7 +84,7 @@ static inline u64 tdh_mem_page_add(hpa_t tdr, gpa_t gpa, hpa_t hpa, hpa_t source
 	};
 
 	tdx_clflush_page(hpa, PG_LEVEL_4K);
-	return tdx_seamcall_sept(TDH_MEM_PAGE_ADD, &in, out);
+	return tdx_seamcall(TDH_MEM_PAGE_ADD, &in, out);
 }
 
 static inline u64 tdh_mem_sept_add(hpa_t tdr, gpa_t gpa, int level, hpa_t page,
@@ -127,7 +97,7 @@ static inline u64 tdh_mem_sept_add(hpa_t tdr, gpa_t gpa, int level, hpa_t page,
 	};
 
 	tdx_clflush_page(page, PG_LEVEL_4K);
-	return tdx_seamcall_sept(TDH_MEM_SEPT_ADD, &in, out);
+	return tdx_seamcall(TDH_MEM_SEPT_ADD, &in, out);
 }
 
 static inline u64 tdh_mem_sept_rd(hpa_t tdr, gpa_t gpa, int level,
@@ -138,7 +108,7 @@ static inline u64 tdh_mem_sept_rd(hpa_t tdr, gpa_t gpa, int level,
 		.rdx = tdr,
 	};
 
-	return tdx_seamcall_sept(TDH_MEM_SEPT_RD, &in, out);
+	return tdx_seamcall(TDH_MEM_SEPT_RD, &in, out);
 }
 
 static inline u64 tdh_mem_sept_remove(hpa_t tdr, gpa_t gpa, int level,
@@ -149,7 +119,7 @@ static inline u64 tdh_mem_sept_remove(hpa_t tdr, gpa_t gpa, int level,
 		.rdx = tdr,
 	};
 
-	return tdx_seamcall_sept(TDH_MEM_SEPT_REMOVE, &in, out);
+	return tdx_seamcall(TDH_MEM_SEPT_REMOVE, &in, out);
 }
 
 static inline u64 tdh_vp_addcx(hpa_t tdvpr, hpa_t addr)
@@ -173,7 +143,7 @@ static inline u64 tdh_mem_page_relocate(hpa_t tdr, gpa_t gpa, hpa_t hpa,
 	};
 
 	tdx_clflush_page(hpa, PG_LEVEL_4K);
-	return tdx_seamcall_sept(TDH_MEM_PAGE_RELOCATE, &in, out);
+	return tdx_seamcall(TDH_MEM_PAGE_RELOCATE, &in, out);
 }
 
 static inline u64 tdh_mem_page_aug(hpa_t tdr, gpa_t gpa, int level, hpa_t hpa,
@@ -186,7 +156,7 @@ static inline u64 tdh_mem_page_aug(hpa_t tdr, gpa_t gpa, int level, hpa_t hpa,
 	};
 
 	tdx_clflush_page(hpa, tdx_sept_level_to_pg_level(level));
-	return tdx_seamcall_sept(TDH_MEM_PAGE_AUG, &in, out);
+	return tdx_seamcall(TDH_MEM_PAGE_AUG, &in, out);
 }
 
 static inline u64 tdh_mem_range_block(hpa_t tdr, gpa_t gpa, int level,
@@ -197,7 +167,7 @@ static inline u64 tdh_mem_range_block(hpa_t tdr, gpa_t gpa, int level,
 		.rdx = tdr,
 	};
 
-	return tdx_seamcall_sept(TDH_MEM_RANGE_BLOCK, &in, out);
+	return tdx_seamcall(TDH_MEM_RANGE_BLOCK, &in, out);
 }
 
 static inline u64 tdh_mng_key_config(hpa_t tdr)
@@ -251,7 +221,7 @@ static inline u64 tdh_mem_page_demote(hpa_t tdr, gpa_t gpa, int level, hpa_t pag
 	};
 
 	tdx_clflush_page(page, PG_LEVEL_4K);
-	return tdx_seamcall_sept(TDH_MEM_PAGE_DEMOTE, &in, out);
+	return tdx_seamcall(TDH_MEM_PAGE_DEMOTE, &in, out);
 }
 
 static inline u64 tdh_mem_page_promote(hpa_t tdr, gpa_t gpa, int level,
@@ -262,7 +232,7 @@ static inline u64 tdh_mem_page_promote(hpa_t tdr, gpa_t gpa, int level,
 		.rdx = tdr,
 	};
 
-	return tdx_seamcall_sept(TDH_MEM_PAGE_PROMOTE, &in, out);
+	return tdx_seamcall(TDH_MEM_PAGE_PROMOTE, &in, out);
 }
 
 static inline u64 tdh_mr_extend(hpa_t tdr, gpa_t gpa,
@@ -371,7 +341,7 @@ static inline u64 tdh_mem_page_remove(hpa_t tdr, gpa_t gpa, int level,
 		.rdx = tdr,
 	};
 
-	return tdx_seamcall_sept(TDH_MEM_PAGE_REMOVE, &in, out);
+	return tdx_seamcall(TDH_MEM_PAGE_REMOVE, &in, out);
 }
 
 static inline u64 tdh_sys_lp_shutdown(void)
@@ -399,7 +369,7 @@ static inline u64 tdh_mem_range_unblock(hpa_t tdr, gpa_t gpa, int level,
 		.rdx = tdr,
 	};
 
-	return tdx_seamcall_sept(TDH_MEM_RANGE_UNBLOCK, &in, out);
+	return tdx_seamcall(TDH_MEM_RANGE_UNBLOCK, &in, out);
 }
 
 static inline u64 tdh_phymem_cache_wb(bool resume)

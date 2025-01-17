@@ -1477,7 +1477,7 @@ static int tdx_mem_page_aug(struct kvm *kvm, gfn_t gfn,
 	u64 err;
 
 	err = tdh_mem_page_aug(kvm_tdx->tdr_pa, gpa, tdx_level, hpa, &out);
-	if (unlikely(err == TDX_ERROR_SEPT_BUSY)) {
+	if (unlikely(err)) {
 		tdx_unpin(kvm, pfn, level);
 		return -EAGAIN;
 	}
@@ -1534,7 +1534,7 @@ static int tdx_mem_page_add(struct kvm *kvm, gfn_t gfn,
 		 * This path is executed during populating initial guest memory
 		 * image. i.e. before running any vcpu.  Race is rare.
 		 */
-	} while (unlikely(err == TDX_ERROR_SEPT_BUSY));
+	} while (unlikely(err));
 	/*
 	 * Don't warn: This is for KVM_MEMORY_MAPPING. So tdh_mem_page_add() can
 	 * fail with parameters user provided.
@@ -1602,7 +1602,7 @@ static int tdx_sept_drop_private_spte(struct kvm *kvm, gfn_t gfn,
 		 * TDH.VP.ENTER.
 		 */
 		err = tdh_mem_page_remove(kvm_tdx->tdr_pa, gpa, tdx_level, &out);
-	} while (unlikely(err == TDX_ERROR_SEPT_BUSY));
+	} while (unlikely(err));
 	if (KVM_BUG_ON(err, kvm)) {
 		pr_tdx_error(TDH_MEM_PAGE_REMOVE, err, &out);
 		return -EIO;
@@ -1642,7 +1642,7 @@ static int tdx_sept_link_private_spt(struct kvm *kvm, gfn_t gfn,
 	u64 err;
 
 	err = tdh_mem_sept_add(kvm_tdx->tdr_pa, gpa, tdx_level, hpa, &out);
-	if (unlikely(err == TDX_ERROR_SEPT_BUSY))
+	if (unlikely(err))
 		return -EAGAIN;
 	if (KVM_BUG_ON(err, kvm)) {
 		pr_tdx_error(TDH_MEM_SEPT_ADD, err, &out);
@@ -1666,7 +1666,7 @@ static int tdx_sept_split_private_spt(struct kvm *kvm, gfn_t gfn,
 	do {
 		err = tdh_mem_page_demote(kvm_tdx->tdr_pa, gpa, tdx_level, hpa, &out);
 	} while (err == TDX_INTERRUPTED_RESTARTABLE);
-	if (unlikely(err == TDX_ERROR_SEPT_BUSY))
+	if (unlikely(err))
 		return -EAGAIN;
 	if (KVM_BUG_ON(err, kvm)) {
 		pr_tdx_error(TDH_MEM_PAGE_DEMOTE, err, &out);
@@ -1689,7 +1689,7 @@ static int tdx_sept_merge_private_spt(struct kvm *kvm, gfn_t gfn,
 	do {
 		err = tdh_mem_page_promote(kvm_tdx->tdr_pa, gpa, tdx_level, &out);
 	} while (err == TDX_INTERRUPTED_RESTARTABLE);
-	if (unlikely(err == TDX_ERROR_SEPT_BUSY))
+	if (unlikely(err))
 		return -EAGAIN;
 	if (unlikely(err == (TDX_EPT_INVALID_PROMOTE_CONDITIONS |
 			     TDX_OPERAND_ID_RCX)))
@@ -1735,7 +1735,7 @@ static int tdx_sept_zap_private_spte(struct kvm *kvm, gfn_t gfn,
 		return 0;
 
 	err = tdh_mem_range_block(kvm_tdx->tdr_pa, gpa, tdx_level, &out);
-	if (unlikely(err == TDX_ERROR_SEPT_BUSY))
+	if (unlikely(err))
 		return -EAGAIN;
 	if (KVM_BUG_ON(err, kvm)) {
 		pr_tdx_error(TDH_MEM_RANGE_BLOCK, err, &out);
@@ -1835,7 +1835,7 @@ static int tdx_sept_unzap_private_spte(struct kvm *kvm, gfn_t gfn,
 		 * tdh_mem_range_block() to complete TDX track.
 		 */
 	} while (err == (TDX_TLB_TRACKING_NOT_DONE | TDX_OPERAND_ID_SEPT));
-	if (unlikely(err == TDX_ERROR_SEPT_BUSY))
+	if (unlikely(err))
 		return -EAGAIN;
 	if (KVM_BUG_ON(err, kvm)) {
 		pr_tdx_error(TDH_MEM_RANGE_UNBLOCK, err, &out);
