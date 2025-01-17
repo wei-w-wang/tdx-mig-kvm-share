@@ -1597,6 +1597,9 @@ static int tdx_sept_drop_private_spte(struct kvm *kvm, gfn_t gfn,
 		return 0;
 	}
 
+	if (!kvm_tdx->td_initialized)
+		return 0;
+
 	err = tdh_mem_page_remove(kvm_tdx->tdr_pa, gpa, tdx_level, &out);
 	if (KVM_BUG_ON(err, kvm)) {
 		pr_tdx_error(TDH_MEM_PAGE_REMOVE, err, &out);
@@ -1706,29 +1709,6 @@ static int tdx_sept_merge_private_spt(struct kvm *kvm, gfn_t gfn,
 	return 0;
 }
 
-static int tdx_sept_zap_private_spte(struct kvm *kvm, gfn_t gfn,
-				      enum pg_level level)
-{
-	int tdx_level = pg_level_to_tdx_sept_level(level);
-	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
-	gpa_t gpa = gfn_to_gpa(gfn) & KVM_HPAGE_MASK(level);
-	struct tdx_module_args out;
-	u64 err;
-
-	/* This can be called when destructing guest TD after freeing HKID. */
-	if (unlikely(!is_hkid_assigned(kvm_tdx)))
-		return 0;
-
-	err = tdh_mem_range_block(kvm_tdx->tdr_pa, gpa, tdx_level, &out);
-	if (unlikely(err))
-		return -EAGAIN;
-	if (KVM_BUG_ON(err, kvm)) {
-		pr_tdx_error(TDH_MEM_RANGE_BLOCK, err, &out);
-		return -EIO;
-	}
-	return 0;
-}
-
 /*
  * TLB shoot down procedure:
  * There is a global epoch counter and each vcpu has local epoch counter.
@@ -1799,6 +1779,40 @@ static void tdx_track(struct kvm *kvm)
 
 }
 
+static int tdx_sept_zap_private_spte(struct kvm *kvm, gfn_t gfn,
+				      enum pg_level level)
+{
+	int tdx_level = pg_level_to_tdx_sept_level(level);
+	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
+	gpa_t gpa = gfn_to_gpa(gfn) & KVM_HPAGE_MASK(level);
+	struct tdx_module_args out;
+	u64 err;
+
+	/* This can be called when destructing guest TD after freeing HKID. */
+	if (unlikely(!is_hkid_assigned(kvm_tdx) || !kvm_tdx->td_initialized))
+		return 0;
+
+	err = tdh_mem_range_block(kvm_tdx->tdr_pa, gpa, tdx_level, &out);
+	if (unlikely(err))
+		return -EAGAIN;
+	if (KVM_BUG_ON(err, kvm)) {
+		pr_tdx_error(TDH_MEM_RANGE_BLOCK, err, &out);
+		return -EIO;
+	}
+
+	/*
+	 * TDX requires TLB tracking before dropping private page.  Do
+	 * it here, although it is also done later.
+	 * If hkid isn't assigned, the guest is destroying and no vcpu
+	 * runs further.  TLB shootdown isn't needed.
+	 *
+	 * TODO: Call TDH.MEM.TRACK() only when we have called
+	 * TDH.MEM.RANGE.BLOCK(), but not call TDH.MEM.TRACK() yet.
+	 */
+	tdx_track(kvm);
+	return 0;
+}
+
 static int tdx_sept_unzap_private_spte(struct kvm *kvm, gfn_t gfn,
 				       enum pg_level level)
 {
@@ -1863,18 +1877,6 @@ int tdx_sept_flush_remote_tlbs(struct kvm *kvm)
 static int tdx_sept_remove_private_spte(struct kvm *kvm, gfn_t gfn,
 					 enum pg_level level, kvm_pfn_t pfn)
 {
-	/*
-	 * TDX requires TLB tracking before dropping private page.  Do
-	 * it here, although it is also done later.
-	 * If hkid isn't assigned, the guest is destroying and no vcpu
-	 * runs further.  TLB shootdown isn't needed.
-	 *
-	 * TODO: Call TDH.MEM.TRACK() only when we have called
-	 * TDH.MEM.RANGE.BLOCK(), but not call TDH.MEM.TRACK() yet.
-	 */
-	if (is_hkid_assigned(to_kvm_tdx(kvm)))
-		tdx_track(kvm);
-
 	return tdx_sept_drop_private_spte(kvm, gfn, level, pfn);
 }
 
