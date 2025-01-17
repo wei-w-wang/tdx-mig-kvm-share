@@ -418,4 +418,45 @@ static inline u64 tdh_vp_wr(hpa_t tdvpr, u64 field, u64 val, u64 mask,
 	return tdx_seamcall(TDH_VP_WR, &in, out);
 }
 
+static inline u64 tdh_servtd_bind(hpa_t servtd_tdr,
+				  hpa_t target_tdr,
+				  u64 slot_idx,
+				  u64 attr,
+				  u64 type,
+				  struct tdx_module_args *out)
+{
+	struct tdx_module_args in = {
+		.rcx = target_tdr,
+		.rdx = servtd_tdr,
+		.r8 = slot_idx,
+		.r9 = type,
+		.r10 = attr,
+	};
+
+	return tdx_seamcall_saved(TDH_SERVTD_BIND, &in, out);
+}
+
+enum kvm_tdx_servtd_type {
+	KVM_TDX_SERVTD_TYPE_MIGTD = 0,
+
+	KVM_TDX_SERVTD_TYPE_MAX,
+};
+
+static inline u64 tdh_servtd_prebind(hpa_t target_tdr,
+				     hpa_t hash_addr,
+				     u64 slot_idx,
+				     u64 attr,
+				     enum kvm_tdx_servtd_type type)
+{
+	struct tdx_module_args in = {
+		.rcx = target_tdr,
+		.rdx = hash_addr,
+		.r8 = slot_idx,
+		.r9 = type,
+		.r10 = attr,
+	};
+
+	return tdx_seamcall(TDH_SERVTD_PREBIND, &in, NULL);
+}
+
 #endif /* __KVM_X86_TDX_OPS_H */
