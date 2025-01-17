@@ -551,6 +551,8 @@ void tdx_vm_free(struct kvm *kvm)
 
 	tdx_vm_free_tdcs(kvm_tdx);
 	tdx_vm_free_tdr(kvm_tdx);
+
+	kvm_tdx->td_initialized = false;
 }
 
 static int tdx_do_tdh_mng_key_config(void *param)
@@ -2488,8 +2490,17 @@ static int setup_tdparams(struct kvm *kvm, struct td_params *td_params,
 	return 0;
 }
 
+static int tdx_td_post_init(struct kvm_tdx *kvm_tdx)
+{
+	/* Fields that need to be updated after TD is initialized */
+	kvm_tdx->td_initialized = true;
+	kvm_tdx->tsc_offset = td_tdcs_exec_read64(kvm_tdx,
+						  TD_TDCS_EXEC_TSC_OFFSET);
+	return 0;
+}
+
 static int __tdx_td_init(struct kvm *kvm, struct td_params *td_params,
-			 u64 *seamcall_err)
+			 u64 *seamcall_err, bool delay_init)
 {
 	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
 	struct tdx_module_args out;
@@ -2607,21 +2618,25 @@ static int __tdx_td_init(struct kvm *kvm, struct td_params *td_params,
 		}
 	}
 
-	err = tdh_mng_init(kvm_tdx->tdr_pa, __pa(td_params), &out);
-	if (seamcall_masked_status(err) == TDX_OPERAND_INVALID) {
-		/*
-		 * Because a user gives operands, don't warn.
-		 * Return a hint to the user because it's sometimes hard for the
-		 * user to figure out which operand is invalid.  SEAMCALL status
-		 * code includes which operand caused invalid operand error.
-		 */
-		*seamcall_err = err;
-		ret = -EINVAL;
-		goto teardown;
-	} else if (WARN_ON_ONCE(err)) {
-		pr_tdx_error(TDH_MNG_INIT, err, &out);
-		ret = -EIO;
-		goto teardown;
+	if (!delay_init) {
+		err = tdh_mng_init(kvm_tdx->tdr_pa, __pa(td_params), &out);
+		if (seamcall_masked_status(err) == TDX_OPERAND_INVALID) {
+			/*
+			 * Because a user gives operands, don't warn.
+			 * Return a hint to the user because it's sometimes hard for the
+			 * user to figure out which operand is invalid.  SEAMCALL status
+			 * code includes which operand caused invalid operand error.
+			 */
+			*seamcall_err = err;
+			ret = -EINVAL;
+			goto teardown;
+		} else if (WARN_ON_ONCE(err)) {
+			pr_tdx_error(TDH_MNG_INIT, err, &out);
+			ret = -EIO;
+			goto teardown;
+		}
+
+		tdx_td_post_init(kvm_tdx);
 	}
 
 	kvm_set_apicv_inhibit(kvm, APICV_INHIBIT_REASON_TDX);
@@ -2681,7 +2696,7 @@ static int tdx_td_init(struct kvm *kvm, struct kvm_tdx_cmd *cmd)
 	if (is_hkid_assigned(kvm_tdx))
 		return -EINVAL;
 
-	if (cmd->flags)
+	if (cmd->flags && cmd->flags != KVM_TDX_INIT_VM_F_DELAY_INIT)
 		return -EINVAL;
 
 	WARN_ON_ONCE(kvm_tdx->cpuid);
@@ -2730,11 +2745,11 @@ static int tdx_td_init(struct kvm *kvm, struct kvm_tdx_cmd *cmd)
 	if (ret)
 		goto out;
 
-	ret = __tdx_td_init(kvm, td_params, &cmd->error);
+	ret = __tdx_td_init(kvm, td_params, &cmd->error,
+			    cmd->flags & KVM_TDX_INIT_VM_F_DELAY_INIT);
 	if (ret)
 		goto out;
 
-	kvm_tdx->tsc_offset = td_tdcs_exec_read64(kvm_tdx, TD_TDCS_EXEC_TSC_OFFSET);
 	kvm_tdx->attributes = td_params->attributes;
 	kvm_tdx->xfam = td_params->xfam;
 
@@ -2803,7 +2818,7 @@ static int tdx_extend_memory(struct kvm *kvm, struct kvm_tdx_cmd *cmd)
 	if (is_td_finalized(kvm_tdx))
 		return -EINVAL;
 
-	if (cmd->flags)
+	if (cmd->flags && cmd->flags != KVM_TDX_INIT_VM_F_DELAY_INIT)
 		return -EINVAL;
 
 	if (copy_from_user(&mapping, (void __user *)cmd->data, sizeof(mapping)))
