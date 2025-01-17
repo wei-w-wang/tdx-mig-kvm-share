@@ -2764,6 +2764,10 @@ static int tdx_td_init(struct kvm *kvm, struct kvm_tdx_cmd *cmd)
 	else
 		kvm->arch.gfn_shared_mask = gpa_to_gfn(BIT_ULL(47));
 
+	if (kvm_tdx->attributes & TDX_TD_ATTRIBUTE_MIG)
+		ret = tdx_mig_prebind_migtd(kvm_tdx,
+					    (void *)init_vm->migtd_hash);
+
 out:
 	/* kfree() accepts NULL. */
 	if (ret) {
