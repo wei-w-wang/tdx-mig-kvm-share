@@ -68,6 +68,22 @@ struct tdx_info {
 /* Info about the TDX module. */
 static struct tdx_info *tdx_info;
 
+enum tdvmcall_service_status {
+	TDVMCALL_SERVICE_S_RSVD = 0xFFFFFFFF,
+};
+
+/* TDG.VP.VMCALL.SERVICE command/response buffer layout, defined in GHCI */
+struct tdvmcall_service {
+	/* Identify the sub-command */
+	guid_t   guid;
+	/* Size in bytes of the entire buffer data */
+	uint32_t length;
+	/* Currently used by response only */
+	uint32_t status;
+	/* Sub-command specific data */
+	uint8_t  data[0];
+};
+
 int tdx_vm_enable_cap(struct kvm *kvm, struct kvm_enable_cap *cap)
 {
 	int r;
@@ -1426,6 +1442,103 @@ static int tdx_get_td_vm_call_info(struct kvm_vcpu *vcpu)
 	return 1;
 }
 
+static struct tdvmcall_service *tdvmcall_servbuf_alloc(struct kvm_vcpu *vcpu,
+						       gpa_t gpa)
+{
+	uint32_t length;
+	gfn_t gfn = gpa_to_gfn(gpa);
+	struct tdvmcall_service __user *g_buf, *h_buf;
+
+	if (!PAGE_ALIGNED(gpa)) {
+		pr_err("TDG.VP.VMCALL.SERVICE: buffer isn't page aligned\n");
+		return NULL;
+	}
+
+	g_buf = (struct tdvmcall_service *)kvm_vcpu_gfn_to_hva(vcpu, gfn);
+	if (kvm_is_error_hva((unsigned long)g_buf)) {
+		pr_err("TDG.VP.VMCALL.SERVICE: not a valid buf\n");
+		return NULL;
+	}
+	if (g_buf && get_user(length, &g_buf->length)) {
+		pr_err("TDG.VP.VMCALL.SERVICE: failed to get buffer length\n");
+		return NULL;
+	}
+
+	if (!length) {
+		pr_err("TDG.VP.VMCALL.SERVICE: buffer length 0 is invalid\n");
+		return NULL;
+	}
+
+	/* The status field by default is 0 */
+	h_buf = kzalloc(max_t(uint32_t, length, PAGE_SIZE),
+			GFP_KERNEL_ACCOUNT);
+	if (!h_buf)
+		return NULL;
+
+	if (copy_from_user(h_buf, g_buf, length)) {
+		kfree(h_buf);
+		return NULL;
+	}
+
+	return h_buf;
+}
+
+static void tdvmcall_status_copy_and_free(struct kvm_vcpu *vcpu, gpa_t gpa,
+					  struct tdvmcall_service *h_buf)
+{
+	gfn_t gfn;
+	struct tdvmcall_service __user *g_buf;
+
+	/* Checks that the guest page to write is a shared page */
+	if (kvm_mem_is_private(vcpu->kvm, gpa_to_gfn(gpa))) {
+		tdvmcall_set_return_code(vcpu, TDVMCALL_INVALID_OPERAND);
+		return;
+	}
+
+	gfn = gpa_to_gfn(gpa);
+	g_buf = (struct tdvmcall_service *)kvm_vcpu_gfn_to_hva(vcpu, gfn);
+	if (copy_to_user(g_buf, h_buf, h_buf->length)) {
+		/* Guest sees TDVMCALL_SERVICE_S_RSVD in status */
+		pr_err("Failed to update to the guest response buffer\n");
+	}
+
+	kfree(h_buf);
+}
+
+static int tdx_handle_service(struct kvm_vcpu *vcpu)
+{
+	struct kvm *kvm = vcpu->kvm;
+	gpa_t cmd_gpa = tdvmcall_a0_read(vcpu) &
+			~gfn_to_gpa(kvm_gfn_shared_mask(kvm));
+	gpa_t resp_gpa = tdvmcall_a1_read(vcpu) &
+			~gfn_to_gpa(kvm_gfn_shared_mask(kvm));
+	struct tdvmcall_service *cmd_buf, *resp_buf;
+
+	/* Fail the call if the service TD asks for interrupt support */
+	if (tdvmcall_a2_read(vcpu)) {
+		tdvmcall_set_return_code(vcpu, TDVMCALL_INVALID_OPERAND);
+		goto err_cmd;
+	}
+
+	cmd_buf = tdvmcall_servbuf_alloc(vcpu, cmd_gpa);
+	if (!cmd_buf)
+		goto err_cmd;
+	resp_buf = tdvmcall_servbuf_alloc(vcpu, resp_gpa);
+	if (!resp_buf)
+		goto err_status;
+	resp_buf->length = sizeof(struct tdvmcall_service);
+	resp_buf->status = TDVMCALL_SERVICE_S_RSVD;
+
+	/* Sub-command handling */
+
+	/* Sync the responses from host to guest buffer */
+	tdvmcall_status_copy_and_free(vcpu, resp_gpa, resp_buf);
+err_status:
+	kfree(cmd_buf);
+err_cmd:
+	return 1;
+}
+
 static int handle_tdvmcall(struct kvm_vcpu *vcpu)
 {
 	if (tdvmcall_exit_type(vcpu))
@@ -1444,6 +1557,9 @@ static int handle_tdvmcall(struct kvm_vcpu *vcpu)
 		return tdx_emulate_rdmsr(vcpu);
 	case EXIT_REASON_MSR_WRITE:
 		return tdx_emulate_wrmsr(vcpu);
+	case TDVMCALL_SERVICE:
+		return tdx_handle_service(vcpu);
+		break;
 	case TDVMCALL_GET_TD_VM_CALL_INFO:
 		return tdx_get_td_vm_call_info(vcpu);
 	default:
