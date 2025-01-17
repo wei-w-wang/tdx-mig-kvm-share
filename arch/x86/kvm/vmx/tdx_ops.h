@@ -15,16 +15,15 @@
 #include "tdx_arch.h"
 #include "x86.h"
 
-static inline u64 tdx_seamcall(u64 op, struct tdx_module_args *in,
-			       struct tdx_module_args *out)
+static inline u64 __tdx_seamcall(u64 op, struct tdx_module_args *in,
+				 struct tdx_module_args *out, bool need_saved)
 {
 	u64 ret;
 
-	if (out) {
-		*out = *in;
-		ret = seamcall_ret(op, out);
-	} else
-		ret = seamcall(op, in);
+	if (need_saved)
+		ret = seamcall_saved_ret(op, in);
+	else
+		ret = seamcall_ret(op, in);
 
 	if (unlikely(ret == TDX_SEAMCALL_UD)) {
 		/*
@@ -38,7 +37,23 @@ static inline u64 tdx_seamcall(u64 op, struct tdx_module_args *in,
 		kvm_spurious_fault();
 		return 0;
 	}
+
+	if (out)
+		*out = *in;
+
 	return ret;
+}
+
+static inline u64 tdx_seamcall(u64 op, struct tdx_module_args *in,
+			       struct tdx_module_args *out)
+{
+	return __tdx_seamcall(op, in, out, false);
+}
+
+static inline u64 tdx_seamcall_saved(u64 op, struct tdx_module_args *in,
+				     struct tdx_module_args *out)
+{
+	return __tdx_seamcall(op, in, out, true);
 }
 
 #ifdef CONFIG_INTEL_TDX_HOST
