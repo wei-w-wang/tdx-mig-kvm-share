@@ -3730,6 +3730,12 @@ static int __init tdx_module_setup(void)
 	}
 #endif
 
+	ret = tdx_mig_capabilities_setup();
+	if (ret)
+		pr_info("tdx: live migration not supported\n");
+	else
+		pr_info("tdx: live migration supported\n");
+
 	return 0;
 
 error_out:
