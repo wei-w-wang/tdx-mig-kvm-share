@@ -55,6 +55,7 @@ struct kvm_tdx {
 	struct page *source_page;
 
 	struct tdx_binding_info *binding_info;
+	struct tdx_mig_state *mig_state;
 };
 
 union tdx_exit_reason {

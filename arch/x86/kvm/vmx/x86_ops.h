@@ -193,6 +193,7 @@ void tdx_post_memory_mapping(struct kvm_vcpu *vcpu,
 			     struct kvm_memory_mapping *mapping);
 
 int tdx_mig_prepare(struct kvm *kvm, struct kvm_cgm_prepare *prepare);
+int tdx_mig_enable_cap(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm);
 #else
 static inline int tdx_hardware_setup(struct kvm_x86_ops *x86_ops) { return -EOPNOTSUPP; }
 static inline void tdx_hardware_unsetup(void) {}
@@ -261,6 +262,11 @@ static inline int tdx_pre_memory_mapping(struct kvm_vcpu *vcpu,
 	return -EOPNOTSUPP;
 }
 static inline void tdx_post_memory_mapping(struct kvm_vcpu *vcpu, struct kvm_memory_mapping *mapping) {}
+
+static inline int tdx_mig_enable_cap(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm)
+{
+	return -EOPNOTSUPP;
+}
 
 static inline int tdx_mig_prepare(struct kvm *kvm,
 				  struct kvm_cgm_migration_prepare *prepare)

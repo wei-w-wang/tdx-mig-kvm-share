@@ -635,6 +635,7 @@ void tdx_vm_free(struct kvm *kvm)
 		return;
 
 	tdx_put_binding_info(kvm_tdx);
+	tdx_mig_state_destroy(kvm_tdx);
 	tdx_vm_free_tdcs(kvm_tdx);
 	tdx_vm_free_tdr(kvm_tdx);
 
@@ -3156,9 +3157,13 @@ static int tdx_td_init(struct kvm *kvm, struct kvm_tdx_cmd *cmd)
 	else
 		kvm->arch.gfn_shared_mask = gpa_to_gfn(BIT_ULL(47));
 
-	if (kvm_tdx->attributes & TDX_TD_ATTRIBUTE_MIG)
+	if (kvm_tdx->attributes & TDX_TD_ATTRIBUTE_MIG) {
 		ret = tdx_mig_prebind_migtd(kvm_tdx,
 					    (void *)init_vm->migtd_hash);
+		if (ret)
+			goto out;
+		ret = tdx_mig_state_create(to_kvm_tdx(kvm));
+	}
 
 out:
 	/* kfree() accepts NULL. */
