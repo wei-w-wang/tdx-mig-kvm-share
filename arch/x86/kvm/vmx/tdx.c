@@ -896,7 +896,7 @@ static noinstr void tdx_vcpu_enter_exit(struct vcpu_tdx *tdx)
 #undef REG
 	};
 
-	tdx->exit_reason.full = __seamcall_saved_ret(TDH_VP_ENTER, &args);
+	tdx->exit_reason.full = seamcall_saved_ret(TDH_VP_ENTER, &args);
 
 #define REG(reg, REG)	vcpu->arch.regs[VCPU_REGS_ ## REG] = args.reg
 		REG(rcx, RCX);
