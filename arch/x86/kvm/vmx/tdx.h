@@ -87,7 +87,6 @@ struct vcpu_tdx {
 
 	unsigned long tdvpr_pa;
 	unsigned long *tdvpx_pa;
-	bool td_vcpu_created;
 
 	struct list_head cpu_list;
 

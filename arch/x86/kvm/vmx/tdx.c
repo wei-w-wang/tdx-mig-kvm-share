@@ -175,11 +175,6 @@ static __always_inline void tdvmcall_set_return_val(struct kvm_vcpu *vcpu,
 	kvm_r11_write(vcpu, val);
 }
 
-static inline bool is_td_vcpu_created(struct vcpu_tdx *tdx)
-{
-	return tdx->td_vcpu_created;
-}
-
 static inline bool is_td_created(struct kvm_tdx *kvm_tdx)
 {
 	return kvm_tdx->tdr_pa;
@@ -330,7 +325,7 @@ static void tdx_flush_vp(void *arg_)
 	 * list tracking still needs to be updated so that it's correct if/when
 	 * the vCPU does get initialized.
 	 */
-	if (is_td_vcpu_created(to_tdx(vcpu))) {
+	if (to_tdx(vcpu)->initialized) {
 		/*
 		 * No need to retry.  TDX Resources needed for TDH.VP.FLUSH are,
 		 * TDVPR as exclusive, TDR as shared, and TDCS as shared.  This
@@ -833,7 +828,7 @@ void tdx_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
 	/* vcpu_deliver_init method silently discards INIT event. */
 	if (KVM_BUG_ON(init_event, vcpu->kvm))
 		return;
-	if (KVM_BUG_ON(is_td_vcpu_created(to_tdx(vcpu)), vcpu->kvm))
+	if (KVM_BUG_ON(to_tdx(vcpu)->initialized, vcpu->kvm))
 		return;
 
 	/*
@@ -2972,7 +2967,7 @@ static int tdx_td_vcpu_init(struct kvm_vcpu *vcpu, u64 vcpu_rcx)
 	int ret, i;
 	u64 err;
 
-	if (is_td_vcpu_created(tdx))
+	if (tdx->tdvpr_pa)
 		return -EINVAL;
 
 	/*
@@ -3023,7 +3018,6 @@ static int tdx_td_vcpu_init(struct kvm_vcpu *vcpu, u64 vcpu_rcx)
 		return -EIO;
 	}
 
-	tdx->td_vcpu_created = true;
 	return 0;
 
 free_tdvpx:
