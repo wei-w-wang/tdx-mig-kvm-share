@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
+#include <linux/delay.h>
 
 #define TDX_MIG_MAX_STREAM_NR 1
 
@@ -19,6 +20,17 @@
 /* Defined by the TDX ABI spec */
 #define TDX_SERVTD_TYPE_MIGTD		0
 
+#define TDX_MIG_MBMD_NPAGES		1
+
+union tdx_mig_stream_info {
+	uint64_t val;
+	struct {
+		uint64_t index	: 16;
+		uint64_t rsvd	: 47;
+		uint64_t resume	: 1;
+	};
+};
+
 struct tdx_mig_mbmd_data {
 	__u16 size;
 	__u16 mig_version;
@@ -34,6 +46,16 @@ struct tdx_mig_mbmd_data {
 struct tdx_mig_mbmd {
 	struct tdx_mig_mbmd_data *data;
 	uint64_t addr_and_size;
+};
+
+/*
+ * Extra metadata appended to the TDX's MBMD (per state bundle) as an
+ * extension. It's only used between the tdx_mig drivers on the source
+ * and destination.
+ */
+struct tdx_mig_mbmd_ext {
+	#define TDX_MIG_DRIVER_VERSION	1
+	uint16_t driver_version;
 };
 
 /*
@@ -163,6 +185,7 @@ struct tdx_mig_stream {
 struct tdx_mig_state {
 	uint32_t nr_ubuf_pages;
 	uint32_t nr_streams;
+	bool is_src;
 	/*
 	 * Array to store physical addresses of the migration stream context
 	 * pages that have been added to the TDX module. The pages can be
@@ -523,12 +546,163 @@ static int tdx_mig_state_setup(struct kvm_tdx *kvm_tdx)
 					   mig_state->nr_ubuf_pages);
 }
 
+static int tdx_mig_wait_for_prepare_done(struct kvm_tdx *kvm_tdx)
+{
+	struct tdx_binding_info *binding_info = kvm_tdx->binding_info;
+	uint32_t max_retries = 1000;
+
+	while (!atomic_read(&binding_info->migration_prepare_done)) {
+		mdelay(10);
+		if (!max_retries--) {
+			pr_err("Waited for more than 10 seconds\n");
+			return -EBUSY;
+		}
+	}
+
+	return 0;
+}
+
+static struct tdx_mig_mbmd_ext *
+tdx_mig_get_mbmd_ext(struct tdx_mig_stream *stream)
+{
+	struct tdx_mig_mbmd_data *mbmd = stream->mbmd.data;
+
+	return  (struct tdx_mig_mbmd_ext *)((void *)mbmd + mbmd->size);
+}
+
+static void tdx_mig_stream_mbmd_init(struct tdx_mig_stream *stream,
+				     struct page *page)
+{
+	struct tdx_mig_mbmd *mbmd = &stream->mbmd;
+
+	/*
+	 * MBMD address and size format defined in TDX module ABI spec:
+	 * Bits 63:52 - size of the MBMD buffer
+	 * Bits 51:0  - host physical page frame number of the MBMD buffer
+	 */
+	mbmd->addr_and_size = page_to_phys(page) | (PAGE_SIZE - 1) << 52;
+	mbmd->data = page_address(page);
+}
+
+static int tdx_mig_stream_state_buffer_init(struct tdx_mig_stream *stream,
+					    uint64_t uaddr,
+					    uint32_t total_pages)
+{
+	struct tdx_mig_page_list *page_list = &stream->page_list;
+	uint32_t i, state_pages = total_pages - 1;
+	struct page **pages = stream->pages;
+	int ret;
+
+	memset(pages, 0, total_pages * sizeof(struct page *));
+	ret = pin_user_pages_unlocked(uaddr, total_pages, pages, FOLL_WRITE);
+	if (ret != total_pages) {
+		unpin_user_pages(pages, ret);
+		return -ENOMEM;
+	}
+
+	tdx_mig_stream_mbmd_init(stream, pages[0]);
+
+	page_list->info.last_entry = state_pages - 1;
+	for (i = 0; i < state_pages; i++)
+		page_list->entries[i] = page_to_phys(pages[i + 1]);
+
+	return 0;
+}
+
+static int tdx_mig_import_state_immutable(struct kvm_tdx *kvm_tdx,
+					  struct tdx_mig_stream *stream,
+					  struct kvm_cgm_data *data)
+{
+	uint32_t total_pages = DIV_ROUND_UP(data->size, PAGE_SIZE);
+	struct tdx_mig_page_list *page_list = &stream->page_list;
+	union tdx_mig_stream_info stream_info = {.val = 0};
+	struct tdx_mig_mbmd *mbmd = &stream->mbmd;
+	struct tdx_mig_mbmd_ext *mbmd_ext;
+	struct tdx_module_args out;
+	uint64_t err;
+	int ret;
+
+	ret = tdx_mig_stream_state_buffer_init(stream, data->uaddr,
+					       total_pages);
+	if (ret)
+		return ret;
+
+	mbmd_ext = tdx_mig_get_mbmd_ext(stream);
+	if (mbmd_ext->driver_version != TDX_MIG_DRIVER_VERSION) {
+		pr_err("TDX migration driver version doesn't match\n");
+		return -EINVAL;
+	}
+
+	do {
+		err = tdh_import_state_immutable(kvm_tdx->tdr_pa,
+						 mbmd->addr_and_size,
+						 page_list->info.val,
+						 stream_info.val,
+						 &out);
+
+		if (seamcall_masked_status(err) == TDX_INTERRUPTED_RESUMABLE)
+			stream_info.resume = 1;
+	} while (seamcall_masked_status(err) == TDX_INTERRUPTED_RESUMABLE);
+
+	unpin_user_pages(stream->pages, total_pages);
+	if (err != TDX_SUCCESS) {
+		pr_err("%s: failed, err=%llx\n", __func__, err);
+		return -EIO;
+	}
+
+	return 0;
+}
+
+static int tdx_mig_export_state_immutable(struct kvm_tdx *kvm_tdx,
+					  struct tdx_mig_stream *stream,
+					  struct kvm_cgm_data *data)
+{
+	/* Immutable state pages plus 1 MBMD page */
+	uint32_t total_pages = tdx_mig_caps.immutable_state_pages + 1;
+	struct tdx_mig_page_list *page_list = &stream->page_list;
+	union tdx_mig_stream_info stream_info = {.val = 0};
+	struct tdx_mig_mbmd *mbmd = &stream->mbmd;
+	struct tdx_mig_mbmd_ext *mbmd_ext;
+	struct tdx_module_args out;
+	uint64_t err;
+	int ret;
+
+	ret = tdx_mig_stream_state_buffer_init(stream, data->uaddr,
+					       total_pages);
+	if (ret)
+		return ret;
+
+	do {
+		err = tdh_export_state_immutable(kvm_tdx->tdr_pa,
+						 mbmd->addr_and_size,
+						 page_list->info.val,
+						 stream_info.val,
+						 &out);
+
+		if (seamcall_masked_status(err) == TDX_INTERRUPTED_RESUMABLE)
+			stream_info.resume = 1;
+	} while (seamcall_masked_status(err) == TDX_INTERRUPTED_RESUMABLE);
+
+	unpin_user_pages(stream->pages, total_pages);
+	if (err != TDX_SUCCESS) {
+		pr_err("%s: failed, err=%llx\n", __func__, err);
+		return -EIO;
+	}
+
+	mbmd_ext = tdx_mig_get_mbmd_ext(stream);
+	mbmd_ext->driver_version = TDX_MIG_DRIVER_VERSION;
+	data->size = (out.rdx + TDX_MIG_MBMD_NPAGES) * PAGE_SIZE;
+
+	return 0;
+}
+
 int tdx_mig_prepare(struct kvm *kvm, struct kvm_cgm_prepare *prepare)
 {
 	int ret;
 	struct kvm *migtd_kvm;
 	struct kvm_tdx *migtd_tdx;
 	struct kvm_tdx *usertd_tdx = to_kvm_tdx(kvm);
+	struct tdx_mig_state *mig_state = usertd_tdx->mig_state;
 
 	migtd_kvm = kvm_get_target_kvm(&prepare->vmid);
 	if (!migtd_kvm || !is_td(migtd_kvm)) {
@@ -542,5 +716,23 @@ int tdx_mig_prepare(struct kvm *kvm, struct kvm_cgm_prepare *prepare)
 
 	tdx_notify_migtd(migtd_tdx);
 
+	mig_state->is_src = prepare->is_src;
 	return tdx_mig_state_setup(usertd_tdx);
+}
+
+int tdx_mig_start(struct kvm *kvm, struct kvm_cgm_data *data)
+{
+	struct kvm_tdx *kvm_tdx = to_kvm_tdx(kvm);
+	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
+	struct tdx_mig_stream *stream = &mig_state->stream;
+	int ret;
+
+	ret = tdx_mig_wait_for_prepare_done(kvm_tdx);
+	if (ret)
+		return ret;
+
+	if (mig_state->is_src)
+		return tdx_mig_export_state_immutable(kvm_tdx, stream, data);
+
+	return tdx_mig_import_state_immutable(kvm_tdx, stream, data);
 }

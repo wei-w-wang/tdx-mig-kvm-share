@@ -1049,6 +1049,14 @@ static int vt_cgm_prepare(struct kvm *kvm,
 	return tdx_mig_prepare(kvm, prepare);
 }
 
+static int vt_cgm_start(struct kvm *kvm, struct kvm_cgm_data *data)
+{
+	if (!is_td(kvm))
+		return -ENOTTY;
+
+	return tdx_mig_start(kvm, data);
+}
+
 #define VMX_REQUIRED_APICV_INHIBITS				\
 	(BIT(APICV_INHIBIT_REASON_DISABLE)|			\
 	 BIT(APICV_INHIBIT_REASON_ABSENT) |			\
@@ -1222,6 +1230,7 @@ struct kvm_x86_ops vt_x86_ops __initdata = {
 
 	.cgm_enable_cap = vt_cgm_enable_cap,
 	.cgm_prepare = vt_cgm_prepare,
+	.cgm_start = vt_cgm_start,
 };
 
 struct kvm_x86_init_ops vt_init_ops __initdata = {
