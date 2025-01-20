@@ -469,4 +469,36 @@ static inline u64 tdh_mig_stream_create(hpa_t tdr, hpa_t migsc)
 	return tdx_seamcall(TDH_MIG_STREAM_CREATE, &in, NULL);
 }
 
+static inline u64 tdh_export_state_immutable(hpa_t tdr,
+					     u64 mbmd_info,
+					     u64 page_list_info,
+					     u64 mig_stream_info,
+					     struct tdx_module_args *out)
+{
+	struct tdx_module_args in = {
+		.rcx = tdr,
+		.r8 = mbmd_info,
+		.r9 = page_list_info,
+		.r10 = mig_stream_info,
+	};
+
+	return tdx_seamcall(TDH_EXPORT_STATE_IMMUTABLE, &in, out);
+}
+
+static inline u64 tdh_import_state_immutable(hpa_t tdr,
+					     u64 mbmd_info,
+					     u64 page_list_info,
+					     u64 mig_stream_info,
+					     struct tdx_module_args *out)
+{
+	struct tdx_module_args in = {
+		.rcx = tdr,
+		.r8 = mbmd_info,
+		.r9 = page_list_info,
+		.r10 = mig_stream_info,
+	};
+
+	return tdx_seamcall(TDH_IMPORT_STATE_IMMUTABLE, &in, out);
+}
+
 #endif /* __KVM_X86_TDX_OPS_H */
