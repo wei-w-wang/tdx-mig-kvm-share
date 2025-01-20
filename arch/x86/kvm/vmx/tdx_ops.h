@@ -459,4 +459,14 @@ static inline u64 tdh_servtd_prebind(hpa_t target_tdr,
 	return tdx_seamcall(TDH_SERVTD_PREBIND, &in, NULL);
 }
 
+static inline u64 tdh_mig_stream_create(hpa_t tdr, hpa_t migsc)
+{
+	struct tdx_module_args in = {
+		.rcx = migsc,
+		.rdx = tdr,
+	};
+
+	return tdx_seamcall(TDH_MIG_STREAM_CREATE, &in, NULL);
+}
+
 #endif /* __KVM_X86_TDX_OPS_H */
