@@ -1855,6 +1855,7 @@ struct kvm_x86_ops {
 
 	int (*cgm_enable_cap)(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm);
 	int (*cgm_prepare)(struct kvm *kvm, struct kvm_cgm_prepare *prepare);
+	int (*cgm_start)(struct kvm *kvm, struct kvm_cgm_data *data);
 };
 
 struct kvm_x86_nested_ops {
