@@ -1853,6 +1853,7 @@ struct kvm_x86_ops {
 				    struct kvm_memory_mapping *mapping);
 	void (*gmem_release)(struct kvm *kvm);
 
+	int (*cgm_enable_cap)(struct kvm *kvm, struct kvm_cap_cgm *cap_cgm);
 	int (*cgm_prepare)(struct kvm *kvm, struct kvm_cgm_prepare *prepare);
 };
 

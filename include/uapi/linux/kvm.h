@@ -1321,6 +1321,8 @@ struct kvm_ppc_resize_hpt {
 #define KVM_CAP_MEMORY_MAPPING 236
 #define KVM_CAP_X86_BUS_FREQUENCY_CONTROL 237
 
+#define KVM_CAP_CGM 239
+
 #define KVM_CAP_ARM_VIRT_MSI_BYPASS 799
 
 #ifdef KVM_CAP_IRQ_ROUTING
@@ -2457,6 +2459,14 @@ struct kvm_memory_mapping {
 	__u64 nr_pages;
 	__u64 flags;
 	__u64 source;
+};
+
+#define KVM_CGM_UAPI_VERSION			1
+
+struct kvm_cap_cgm {
+	__u32 nr_ubuf_pages;
+	__u32 nr_threads;
+	__u64 reserved[6];
 };
 
 #define KVM_CGM_PREPARE _IOWR(KVMIO,  0xd6, struct kvm_cgm_prepare)

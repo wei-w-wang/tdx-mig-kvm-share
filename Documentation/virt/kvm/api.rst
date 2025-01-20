@@ -8806,6 +8806,54 @@ means the VM type with value @n is supported.  Possible values of @n are::
   #define KVM_X86_DEFAULT_VM	0
   #define KVM_X86_SW_PROTECTED_VM	1
 
+8.42 KVM_CAP_CGM
+----------------
+
+:Capability: KVM_CAP_CGM
+:Architectures: x86
+:Type: system ioctl
+:Parameters: args[0] - struct kvm_cap_cgm (in/out)
+:Returns: 0 on success, or < 0 on errors.
+
+::
+
+  struct kvm_cap_cgm {
+	__u32 page_nr;
+	__u32 thread_nr;
+	__u64 reserved[6];
+  };
+
+
+This capability signifies that KVM supports Confidential Guest Migration (CGM).
+CGM is an abstraction layer that connects the typically vendor-neutral
+userspace migration flow with the vendor-specific migration drivers. When
+userspace checks the capability, KVM returns the version of the CGM uAPIs
+(i.e., CGM_GET/SET_*) to userspace.
+
+The CGM uAPIs require userspace to pass a buffer to KVM to get/set the private
+memory or non-memory state data. To determine the buffer size, the number of
+guest private pages to be migrated in a batch must be provided by the userspace
+when enabling the cap. This batch number is subsequently given to the vendor
+migration driver for calculation (e.g., ascertain the maximum number of pages
+required by getting the memory and non-memory state data). The nr_ubuf_pages
+field in struct kvm_cap_cgm serves the purpose. It is input from userspace to
+indicate the max number of guest private pages that the migration session will
+migrate in each CGM_GET/SET_MEMORY_STATE uAPI call (i.e., the max batch number
+of guest private pages). On return, the field will be updated with the number
+of pages that userspace is required to allocate for use with the CGM_GET/SET_*
+uAPI calls.
+
+Userspace may call the uAPIs (CGM_GET/SET_MEMORY_STATE) in parrallel via
+different threads. The thread_nr field input from userspace indicates the
+number of threads that a migration session will use to make the uAPI calls
+in parallel. On return, the nr_threads field will be updated with the number
+of threads that KVM (inquired from the vendor's implementation) supports for
+parallel calls of the uAPIs.
+
+Userspace is allowed to enable the cap for each migration session with the
+info wrapped in a struct kvm_cap_cgm, because different migration sessions may
+have different settings (e.g. number of threads used).
+
 9. Known KVM API problems
 =========================
 

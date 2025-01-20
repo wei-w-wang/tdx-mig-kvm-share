@@ -4750,6 +4750,8 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
 		if (kvm_is_vm_type_supported(KVM_X86_SNP_VM))
 			r |= BIT(KVM_X86_SNP_VM);
 		break;
+	case KVM_CAP_CGM:
+		return KVM_CGM_UAPI_VERSION;
 	default:
 		break;
 	}
@@ -6694,6 +6696,28 @@ split_irqchip_unlock:
 		}
 		mutex_unlock(&kvm->lock);
 		return r;
+	}
+	case KVM_CAP_CGM: {
+		struct kvm_cap_cgm cap_cgm;
+		void __user *argp = (void __user *)cap->args[0];
+
+		r = -EINVAL;
+		if (!kvm_x86_ops.cgm_enable_cap)
+			break;
+
+		r = -EFAULT;
+		if (copy_from_user(&cap_cgm, argp, sizeof(struct kvm_cap_cgm)))
+			break;
+
+		r = static_call(kvm_x86_cgm_enable_cap)(kvm, &cap_cgm);
+		if (r)
+			break;
+
+		r = -EFAULT;
+		if (copy_to_user(argp, &cap_cgm, sizeof(struct kvm_cap_cgm)))
+			break;
+		r = 0;
+		break;
 	}
 	default:
 		r = -EINVAL;
