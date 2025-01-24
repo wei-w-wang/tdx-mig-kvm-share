@@ -1755,6 +1755,8 @@ struct kvm_x86_ops {
 				    kvm_pfn_t pfn);
 	int (*zap_private_spte)(struct kvm *kvm, gfn_t gfn, enum pg_level level);
 	int (*unzap_private_spte)(struct kvm *kvm, gfn_t gfn, enum pg_level level);
+	int (*write_block_private_pages)(struct kvm *kvm, gfn_t *gfns,
+					 uint32_t num);
 
 	bool (*has_wbinvd_exit)(void);
 

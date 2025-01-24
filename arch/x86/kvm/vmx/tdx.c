@@ -3868,6 +3868,7 @@ int __init tdx_hardware_setup(struct kvm_x86_ops *x86_ops)
 	x86_ops->remove_private_spte = tdx_sept_remove_private_spte;
 	x86_ops->zap_private_spte = tdx_sept_zap_private_spte;
 	x86_ops->unzap_private_spte = tdx_sept_unzap_private_spte;
+	x86_ops->write_block_private_pages = tdx_write_block_private_pages;
 
 	return 0;
 

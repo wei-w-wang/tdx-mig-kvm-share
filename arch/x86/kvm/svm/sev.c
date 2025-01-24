@@ -3138,3 +3138,8 @@ void sev_vcpu_deliver_sipi_vector(struct kvm_vcpu *vcpu, u8 vector)
 
 	ghcb_set_sw_exit_info_2(svm->sev_es.ghcb, 1);
 }
+
+int sev_write_block_private_pages(struct kvm *kvm, gfn_t *gfns, uint32_t num)
+{
+	return -EOPNOTSUPP;
+}
