@@ -2426,3 +2426,73 @@ int kvm_tdp_mmu_import_private_pages(struct kvm *kvm,
 	read_unlock(&kvm->mmu_lock);
 	return ret;
 }
+
+static int tdp_mmu_restore_private_page(struct kvm *kvm, gfn_t gfn,
+					u64 *sptep, u64 old_spte, int level)
+{
+	int ret;
+
+	if (!is_writable_pte(old_spte)) {
+		ret = static_call(kvm_x86_write_unblock_private_page)(kvm, gfn, level);
+		if (ret)
+			return ret;
+		kvm_tdp_mmu_write_spte(sptep, old_spte,
+				       old_spte | PT_WRITABLE_MASK, level);
+	}
+
+	if (!kvm_x86_ops.restore_private_page)
+		return 0;
+
+	return static_call(kvm_x86_restore_private_page)(kvm, gfn);
+}
+
+static int tdp_mmu_restore_private_pages(struct kvm *kvm,
+					 struct kvm_mmu_page *root)
+{
+	struct tdp_iter iter;
+	gfn_t end = tdp_mmu_max_gfn_exclusive();
+	gfn_t start = 0;
+	int ret = 0;
+
+	rcu_read_lock();
+	for_each_tdp_pte_min_level(iter, root, PG_LEVEL_4K, start, end) {
+		if (tdp_mmu_iter_cond_resched(kvm, &iter, false, false))
+			continue;
+
+		if (iter.level > PG_LEVEL_4K)
+			continue;
+
+		if (!is_shadow_present_pte(iter.old_spte))
+			continue;
+
+		ret = tdp_mmu_restore_private_page(kvm, iter.gfn, iter.sptep,
+						   iter.old_spte, iter.level);
+		if (ret)
+			break;
+	}
+	rcu_read_unlock();
+
+	return ret;
+}
+
+int kvm_tdp_mmu_restore_private_pages(struct kvm *kvm)
+{
+	struct kvm_mmu_page *root;
+	int i, ret;
+
+	write_lock(&kvm->mmu_lock);
+
+	for (i = 0; i < kvm_arch_nr_memslot_as_ids(kvm); i++) {
+		for_each_tdp_mmu_root_yield_safe(kvm, root, false) {
+			if (!is_private_sp(root))
+				continue;
+			ret = tdp_mmu_restore_private_pages(kvm, root);
+			if (ret)
+				break;
+		}
+	}
+	kvm_flush_remote_tlbs(kvm);
+
+	write_unlock(&kvm->mmu_lock);
+	return ret;
+}
