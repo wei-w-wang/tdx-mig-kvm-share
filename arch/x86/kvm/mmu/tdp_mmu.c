@@ -2303,28 +2303,13 @@ int kvm_tdp_mmu_get_walk(struct kvm_vcpu *vcpu, u64 addr, u64 *sptes,
 	return leaf;
 }
 
-/*
- * Returns the last level spte pointer of the shadow page walk for the given
- * gpa, and sets *spte to the spte value. This spte may be non-preset. If no
- * walk could be performed, returns NULL and *spte does not contain valid data.
- *
- * Contract:
- *  - Must be called between kvm_tdp_mmu_walk_lockless_{begin,end}.
- *  - The returned sptep must not be used after kvm_tdp_mmu_walk_lockless_end.
- *
- * WARNING: This function is only intended to be called during fast_page_fault.
- */
-u64 *kvm_tdp_mmu_fast_pf_get_last_sptep(struct kvm_vcpu *vcpu, u64 addr,
-					u64 *spte)
+static u64 *kvm_tdp_mmu_fast_get_last_sptep(struct kvm_vcpu *vcpu,
+					    bool is_private, gfn_t gfn,
+					    u64 *spte)
 {
 	struct tdp_iter iter;
 	struct kvm_mmu *mmu = vcpu->arch.mmu;
-	gfn_t gfn = gpa_to_gfn(addr) & ~kvm_gfn_shared_mask(vcpu->kvm);
-	bool is_private = kvm_is_private_gpa(vcpu->kvm, addr);
 	tdp_ptep_t sptep = NULL;
-
-	/* fast page fault for private GPA isn't supported. */
-	WARN_ON_ONCE(kvm_is_private_gpa(vcpu->kvm, addr));
 
 	tdp_mmu_for_each_pte(iter, mmu, is_private, gfn, gfn + 1) {
 		*spte = iter.old_spte;
@@ -2342,4 +2327,102 @@ u64 *kvm_tdp_mmu_fast_pf_get_last_sptep(struct kvm_vcpu *vcpu, u64 addr,
 	 * outside of mmu_lock.
 	 */
 	return rcu_dereference(sptep);
+}
+
+/*
+ * Returns the last level spte pointer of the shadow page walk for the given
+ * gpa, and sets *spte to the spte value. This spte may be non-preset. If no
+ * walk could be performed, returns NULL and *spte does not contain valid data.
+ *
+ * Contract:
+ *  - Must be called between kvm_tdp_mmu_walk_lockless_{begin,end}.
+ *  - The returned sptep must not be used after kvm_tdp_mmu_walk_lockless_end.
+ *
+ * WARNING: This function is only intended to be called during fast_page_fault.
+ */
+u64 *kvm_tdp_mmu_fast_pf_get_last_sptep(struct kvm_vcpu *vcpu, u64 addr,
+					u64 *spte)
+{
+	gfn_t gfn = gpa_to_gfn(addr) & ~kvm_gfn_shared_mask(vcpu->kvm);
+	bool is_private = kvm_is_private_gpa(vcpu->kvm, addr);
+
+	return kvm_tdp_mmu_fast_get_last_sptep(vcpu, is_private, gfn, spte);
+}
+
+int kvm_tdp_mmu_import_private_pages(struct kvm *kvm,
+				     struct kvm_cgm_data *data,
+				     struct kvm_import_private_pages *pages)
+{
+	struct kvm_vcpu *vcpu = kvm_get_vcpu(kvm, 0);
+	struct kvm_import_private_gfn *gfns = pages->gfns;
+	uint64_t page_nr = pages->page_nr;
+	uint64_t i, old_spte, new_spte;
+	struct kvm_memory_slot *slot;
+	struct kvm_mmu_page *sp;
+	uint64_t *sptep = NULL;
+	kvm_pfn_t pfn;
+	gfn_t gfn;
+	int ret;
+
+	for (i = 0; i < page_nr; i++) {
+		gfn = (gfn_t)(gfns[i].gfn);
+
+		if (!kvm_mem_is_private(kvm, gfn)) {
+			pr_err("Import page (gfn: %llx) isn't private\n", gfn);
+			return -EINVAL;
+		}
+
+		kvm_tdp_mmu_walk_lockless_begin();
+		kvm_tdp_mmu_fast_get_last_sptep(vcpu, true, gfn, &old_spte);
+		kvm_tdp_mmu_walk_lockless_end();
+
+		if (!is_shadow_present_pte(old_spte)) {
+			slot = gfn_to_memslot(kvm, gfn);
+			if (!slot) {
+				pr_err("Import page not valid\n");
+				return -EINVAL;
+			}
+			ret = kvm_gmem_get_pfn(kvm, slot, gfn, &pfn, NULL);
+			if (ret) {
+				pr_err("Failed to get pfn from gmem\n");
+				return -EIO;
+			}
+			/* Initial (first time) import of a private page */
+			gfns[i].init = true;
+		} else {
+			pfn = spte_to_pfn(old_spte);
+		}
+		pages->pfns[i] = pfn;
+	}
+
+	ret = static_call(kvm_x86_cgm_set_memory_state)(kvm, data, pages);
+
+	read_lock(&kvm->mmu_lock);
+	kvm_tdp_mmu_walk_lockless_begin();
+
+	for (i = 0; i < page_nr; i++) {
+		if (gfns[i].skip)
+			continue;
+
+		gfn = (gfn_t)(gfns[i].gfn);
+		pfn = pages->pfns[i];
+		sptep = kvm_tdp_mmu_fast_get_last_sptep(vcpu, true,
+							gfn, &old_spte);
+		if (!is_shadow_present_pte(old_spte)) {
+			sp = sptep_to_sp(rcu_dereference(sptep));
+			make_spte(vcpu, sp, slot, ACC_ALL,
+				  gfn, pfn, old_spte, false, true,
+				  !(slot->flags & KVM_MEM_READONLY),
+				  &new_spte);
+			__kvm_tdp_mmu_write_spte(sptep, new_spte);
+		} else if (gfns[i].remove) {
+			put_page(pfn_to_page(pfn));
+			__kvm_tdp_mmu_write_spte(sptep,
+						 SHADOW_NONPRESENT_VALUE);
+		}
+	}
+
+	kvm_tdp_mmu_walk_lockless_end();
+	read_unlock(&kvm->mmu_lock);
+	return ret;
 }

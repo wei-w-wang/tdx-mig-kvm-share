@@ -371,6 +371,23 @@ static inline void kvm_mmu_page_role_set_private(union kvm_mmu_page_role *role)
 	role->is_private = 1;
 }
 
+struct kvm_import_private_gfn {
+	uint64_t gfn          : 40,
+		 rsvd         : 21,
+		 skip         : 1,
+		 remove       : 1,
+		 init         : 1;
+};
+
+struct kvm_import_private_pages {
+	struct kvm_import_private_gfn gfns[KVM_CGM_GFN_NUM_MAX];
+	kvm_pfn_t pfns[KVM_CGM_GFN_NUM_MAX];
+	uint64_t page_nr;
+};
+
+int kvm_mmu_import_private_pages(struct kvm *kvm, struct kvm_cgm_data *data,
+				 struct kvm_import_private_pages *pages);
+
 /*
  * kvm_mmu_extended_role complements kvm_mmu_page_role, tracking properties
  * relevant to the current MMU configuration.   When loading CR0, CR4, or EFER,
@@ -1465,6 +1482,8 @@ struct kvm_arch {
 	 * the thread holds the MMU lock in write mode.
 	 */
 	spinlock_t tdp_mmu_pages_lock;
+
+	struct kvm_import_private_pages *import_pages;
 #endif /* CONFIG_X86_64 */
 
 	/*
@@ -1864,6 +1883,8 @@ struct kvm_x86_ops {
 	int (*cgm_set_epoch_token)(struct kvm *kvm, struct kvm_cgm_data *data);
 	int (*cgm_get_memory_state)(struct kvm *kvm, gfn_t *gfns,
 				    uint16_t num, struct kvm_cgm_data *data);
+	int (*cgm_set_memory_state)(struct kvm *kvm, struct kvm_cgm_data *data,
+				    struct kvm_import_private_pages *pages);
 };
 
 struct kvm_x86_nested_ops {

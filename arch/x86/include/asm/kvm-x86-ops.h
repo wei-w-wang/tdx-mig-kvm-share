@@ -167,6 +167,7 @@ KVM_X86_OP_OPTIONAL(cgm_start)
 KVM_X86_OP_OPTIONAL(cgm_get_epoch_token)
 KVM_X86_OP_OPTIONAL(cgm_set_epoch_token)
 KVM_X86_OP_OPTIONAL(cgm_get_memory_state)
+KVM_X86_OP_OPTIONAL(cgm_set_memory_state)
 
 #undef KVM_X86_OP
 #undef KVM_X86_OP_OPTIONAL

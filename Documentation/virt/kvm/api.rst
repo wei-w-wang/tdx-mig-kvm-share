@@ -6423,6 +6423,23 @@ Userspace supplies a buffer through "struct kvm_cgm_data" and a list of GFNs
 through @gfns_uaddr and @gfn_num to the secure firmware via KVM to load the
 data.
 
+4.148 KVM_CGM_SET_MEMORY_STATE
+---------------------------------
+
+:Capability: KVM_CGM_CAP
+:Architectures: x86
+:Type: vm ioctl
+:Parameters: struct kvm_cgm_memory_state (in)
+:Returns: 0 on success, < 0 on error
+
+KVM_CGM_SET_MEMORY_STATE is used by userspace, on the live migration
+destination side, to request the secure firmware (e.g. TDX module) via KVM
+to set memory data to a list of guest private pages.
+
+Userspace places the data into a buffer shared via "struct kvm_cgm_data".
+The @gfn_num variable is used to indicate the number of private pages, the
+data of which is placed within the buffer.
+
 5. The kvm_run structure
 ========================
 
