@@ -3143,3 +3143,8 @@ int sev_write_block_private_pages(struct kvm *kvm, gfn_t *gfns, uint32_t num)
 {
 	return -EOPNOTSUPP;
 }
+
+int sev_write_unblock_private_page(struct kvm *kvm, gfn_t *gfns, uint32_t num)
+{
+	return -EOPNOTSUPP;
+}

@@ -318,6 +318,12 @@ static int tdx_write_block_private_pages(struct kvm *kvm, gfn_t *gfns,
 	return 0;
 }
 
+static int tdx_write_unblock_private_page(struct kvm *kvm,
+					  gfn_t gfn, int level)
+{
+	return -EOPNOTSUPP;
+}
+
 static int tdx_mig_state_create(struct kvm_tdx *kvm_tdx)
 {
 	struct tdx_mig_state *mig_state;

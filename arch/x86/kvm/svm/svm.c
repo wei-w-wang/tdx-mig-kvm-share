@@ -5037,6 +5037,7 @@ static struct kvm_x86_ops svm_x86_ops __initdata = {
 	.mem_enc_unregister_region = sev_mem_enc_unregister_region,
 	.guest_memory_reclaimed = sev_guest_memory_reclaimed,
 	.write_block_private_pages = sev_write_block_private_pages,
+	.write_unblock_private_page = sev_write_block_private_page,
 
 	.vm_copy_enc_context_from = sev_vm_copy_enc_context_from,
 	.vm_move_enc_context_from = sev_vm_move_enc_context_from,
