@@ -388,6 +388,8 @@ struct kvm_import_private_pages {
 int kvm_mmu_import_private_pages(struct kvm *kvm, struct kvm_cgm_data *data,
 				 struct kvm_import_private_pages *pages);
 
+int kvm_mmu_restore_private_pages(struct kvm *kvm);
+
 /*
  * kvm_mmu_extended_role complements kvm_mmu_page_role, tracking properties
  * relevant to the current MMU configuration.   When loading CR0, CR4, or EFER,
@@ -1889,6 +1891,7 @@ struct kvm_x86_ops {
 				  struct kvm_cgm_data *data);
 	int (*cgm_set_vcpu_state)(struct kvm_vcpu *vcpu,
 				  struct kvm_cgm_data *data);
+	int (*cgm_end)(struct kvm *kvm, long abort);
 };
 
 struct kvm_x86_nested_ops {

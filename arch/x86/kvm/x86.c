@@ -7481,6 +7481,20 @@ set_pit2_out:
 		r = kvm_mmu_import_private_pages(kvm, data, pages);
 		break;
 	}
+	case KVM_CGM_END: {
+		long abort;
+
+		r = -ENOTTY;
+		if (!kvm_x86_ops.cgm_end)
+			goto out;
+
+		r = -EFAULT;
+		if (get_user(abort, (const long __user *)argp))
+			goto out;
+
+		r = static_call(kvm_x86_cgm_end)(kvm, abort);
+		break;
+	}
 	default:
 		r = -ENOTTY;
 	}
