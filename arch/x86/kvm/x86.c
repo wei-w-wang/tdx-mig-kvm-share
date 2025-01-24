@@ -5784,7 +5784,7 @@ int kvm_arch_vcpu_memory_mapping(struct kvm_vcpu *vcpu,
 		return r;
 
 	r = kvm_mmu_map_tdp_page(vcpu, gfn_to_gpa(mapping->base_gfn), error_code,
-				 max_level, &goal_level);
+				 max_level, &goal_level, false);
 	if (kvm_x86_ops.post_memory_mapping)
 		static_call(kvm_x86_post_memory_mapping)(vcpu, mapping);
 	if (r)

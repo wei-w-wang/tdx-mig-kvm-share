@@ -185,7 +185,11 @@ static inline void kvm_mmu_refresh_passthrough_bits(struct kvm_vcpu *vcpu,
 }
 
 int kvm_mmu_map_tdp_page(struct kvm_vcpu *vcpu, gpa_t gpa, u64 error_code,
-			 u8 max_level, u8 *goal_level);
+			 u8 max_level, u8 *goal_level, bool nonleaf);
+
+#ifdef CONFIG_KVM_PRIVATE_MEM
+int kvm_prealloc_private_pages(struct kvm *kvm, bool nonleaf);
+#endif
 
 /*
  * Check if a given access (described through the I/D, W/R and U/S bits of a
