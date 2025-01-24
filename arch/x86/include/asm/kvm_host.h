@@ -1887,6 +1887,8 @@ struct kvm_x86_ops {
 				    struct kvm_import_private_pages *pages);
 	int (*cgm_get_vcpu_state)(struct kvm_vcpu *vcpu,
 				  struct kvm_cgm_data *data);
+	int (*cgm_set_vcpu_state)(struct kvm_vcpu *vcpu,
+				  struct kvm_cgm_data *data);
 };
 
 struct kvm_x86_nested_ops {
