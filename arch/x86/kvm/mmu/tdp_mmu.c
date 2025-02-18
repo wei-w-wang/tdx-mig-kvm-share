@@ -2166,6 +2166,8 @@ static void zap_collapsible_spte_range(struct kvm *kvm,
 	gfn_t end = start + slot->npages;
 	struct tdp_iter iter;
 	int max_mapping_level;
+	bool is_private = kvm_slot_can_be_private(slot) &&
+			  kvm_mem_is_private(kvm, start);
 
 	rcu_read_lock();
 
@@ -2197,7 +2199,7 @@ retry:
 			continue;
 
 		max_mapping_level = kvm_mmu_max_mapping_level(kvm, slot,
-							      iter.gfn, PG_LEVEL_NUM, false);
+							      iter.gfn, PG_LEVEL_NUM, is_private);
 		if (max_mapping_level < iter.level)
 			continue;
 
