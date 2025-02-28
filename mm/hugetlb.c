@@ -7625,7 +7625,7 @@ void hugetlb_zero_partial_page(struct hstate *h,
 	struct folio *folio;
 
 	folio = filemap_lock_folio(mapping, idx);
-	if (!folio)
+	if (folio == ERR_PTR(-ENOENT))
 		return;
 
 	start = start & ~huge_page_mask(h);
