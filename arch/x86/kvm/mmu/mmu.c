@@ -4324,8 +4324,17 @@ static inline u8 kvm_max_level_for_order(int order)
 static void kvm_mmu_prepare_memory_fault_exit(struct kvm_vcpu *vcpu,
 					      struct kvm_page_fault *fault)
 {
+	gpa_t size;
+
+	if (fault->max_level == PG_LEVEL_1G)
+		size = HPAGE_PUD_SIZE;
+	else if (fault->max_level == PG_LEVEL_2M)
+		size = HPAGE_SIZE;
+	else
+		size = PAGE_SIZE;
+
 	kvm_prepare_memory_fault_exit(vcpu, fault->gfn << PAGE_SHIFT,
-				      PAGE_SIZE, fault->write, fault->exec,
+				      size, fault->write, fault->exec,
 				      fault->is_private);
 }
 
