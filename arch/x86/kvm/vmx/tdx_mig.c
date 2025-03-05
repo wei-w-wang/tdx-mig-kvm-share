@@ -900,6 +900,7 @@ int tdx_mig_start(struct kvm *kvm, struct kvm_cgm_data *data)
 	if (ret)
 		return ret;
 
+	atomic_set(&mig_state->nr_vcpus_migrated, 0);
 	if (mig_state->is_src)
 		return tdx_mig_export_state_immutable(kvm_tdx, stream, data);
 
