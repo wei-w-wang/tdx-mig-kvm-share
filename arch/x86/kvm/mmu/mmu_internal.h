@@ -225,6 +225,18 @@ static inline gfn_t kvm_gfn_for_root(struct kvm *kvm, struct kvm_mmu_page *root,
 		return kvm_gfn_to_shared(kvm, gfn);
 }
 
+static inline gfn_t kvm_gfn_root_bits(const struct kvm *kvm, const struct kvm_mmu_page *root)
+{
+	/*
+	 * Since private SPs are used only for TDX, which maps private memory
+	 * at its "natural" GFN, no mask needs to be applied to them - and, dually,
+	 * we expect that the bits is only used for the shared PT.
+	 */
+	if (is_private_sp(root))
+		return 0;
+	return kvm_gfn_shared_mask(kvm);
+}
+
 static inline bool kvm_mmu_page_ad_need_write_protect(struct kvm *kvm,
 						      struct kvm_mmu_page *sp)
 {
