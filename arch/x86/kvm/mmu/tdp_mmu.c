@@ -2099,9 +2099,6 @@ static void clear_dirty_pt_masked(struct kvm *kvm, struct kvm_mmu_page *root,
 						   shadow_dirty_mask;
 	struct tdp_iter iter;
 
-	if (!is_private_sp(root))
-		gfn = kvm_gfn_to_shared(kvm, gfn);
-
 	lockdep_assert_held_write(&kvm->mmu_lock);
 
 	rcu_read_lock();
