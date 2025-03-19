@@ -1231,6 +1231,7 @@ static int set_memory_buffer_setup(struct tdx_mig_stream *stream,
 	gpa_list_entries = stream->gpa_list.entries;
 	for (i = 0; i < gfn_nr; i++) {
 		if (gpa_list_entries[i].gfn != td_gfns[i].gfn) {
+			td_gfns[i].skip = true;
 			pr_err("%s: err, gfn_nr=%d, list gfn=%llx, gfns[%d].gfn=%llx\n",
 				__func__, gfn_nr, (uint64_t)(gpa_list_entries[i].gfn),
 				i, (uint64_t)(td_gfns[i].gfn));
