@@ -3377,7 +3377,7 @@ static bool page_fault_can_be_fast(struct kvm *kvm, struct kvm_page_fault *fault
 	 *    SPTE is MMU-writable (determined later), the fault can be fixed
 	 *    by setting the Writable bit, which can be done out of mmu_lock.
 	 */
-	if (!fault->present)
+	if (!fault->is_private && !fault->present)
 		return !kvm_ad_enabled();
 
 	/*

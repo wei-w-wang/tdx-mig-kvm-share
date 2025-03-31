@@ -1887,6 +1887,7 @@ static int tdx_mem_page_aug(struct kvm *kvm, gfn_t gfn,
 
 	err = tdh_mem_page_aug(kvm_tdx->tdr_pa, gpa, tdx_level, hpa, &out);
 	if (unlikely(err)) {
+		pr_err("%s: err=%llx, gfn=%llx, out.rcx=%llx, out.rdx=%llx\n", __func__, err, gfn, out.rcx, out.rdx);
 		tdx_unpin(kvm, pfn, level);
 		return -EAGAIN;
 	}
