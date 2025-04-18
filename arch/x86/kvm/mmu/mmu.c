@@ -4325,17 +4325,23 @@ static void kvm_mmu_prepare_memory_fault_exit(struct kvm_vcpu *vcpu,
 					      struct kvm_page_fault *fault)
 {
 	gpa_t size;
+	bool is_private = fault->is_private;
 
-	if (fault->max_level == PG_LEVEL_1G)
+	/*
+	 * Only private pages can be converted to a page size larger than 4KB.
+	 * For example, in the TDX case, TDG.MEM.PAGE.ACCEPT can request to
+	 * accept a 2MB private page.
+	 */
+	if (is_private && fault->max_level == PG_LEVEL_1G)
 		size = HPAGE_PUD_SIZE;
-	else if (fault->max_level == PG_LEVEL_2M)
+	else if (is_private && fault->max_level == PG_LEVEL_2M)
 		size = HPAGE_SIZE;
 	else
 		size = PAGE_SIZE;
 
 	kvm_prepare_memory_fault_exit(vcpu, fault->gfn << PAGE_SHIFT,
 				      size, fault->write, fault->exec,
-				      fault->is_private);
+				      is_private);
 }
 
 static int kvm_faultin_pfn_private(struct kvm_vcpu *vcpu,
