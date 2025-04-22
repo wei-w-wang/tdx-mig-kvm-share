@@ -2400,8 +2400,11 @@ int kvm_tdp_mmu_import_private_pages(struct kvm *kvm,
 	kvm_tdp_mmu_walk_lockless_begin();
 
 	for (i = 0; i < page_nr; i++) {
-		if (gfns[i].skip)
+		if (gfns[i].skip) {
+			if (!is_shadow_present_pte(old_spte))
+				folio_put(page_folio(pfn_to_page(pfn)));
 			continue;
+		}
 
 		gfn = (gfn_t)(gfns[i].gfn);
 		pfn = pages->pfns[i];
