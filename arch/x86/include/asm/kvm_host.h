@@ -1427,6 +1427,8 @@ struct kvm_arch {
 	bool bus_lock_detection_enabled;
 	bool enable_pmu;
 
+	bool cgm_started;
+
 	u32 notify_window;
 	u32 notify_vmexit_flags;
 	/*

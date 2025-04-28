@@ -7785,6 +7785,7 @@ static int kvm_mmu_worker_handle_restore(struct kvm *kvm)
 		return ret;
 	}
 
+	kvm->arch.cgm_started = false;
 	kvm->arch.mmu_worker_requests &= ~KVM_MMU_WORK_TYPE_RESTORE;
 	return 0;
 }

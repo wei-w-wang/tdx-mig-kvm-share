@@ -217,7 +217,6 @@ struct tdx_mig_state {
 	uint32_t nr_ubuf_pages;
 	uint32_t nr_streams;
 	bool is_src;
-	bool started;
 	atomic_t nr_vcpus_migrated;
 	/*
 	 * Array to store physical addresses of the migration stream context
@@ -778,7 +777,6 @@ static int tdx_mig_import_state_immutable(struct kvm_tdx *kvm_tdx,
 					  struct tdx_mig_stream *stream,
 					  struct kvm_cgm_data *data)
 {
-	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
 	uint32_t total_pages = DIV_ROUND_UP(data->size, PAGE_SIZE);
 	struct tdx_mig_page_list *page_list = &stream->page_list;
 	union tdx_mig_stream_info stream_info = {.val = 0};
@@ -816,7 +814,6 @@ static int tdx_mig_import_state_immutable(struct kvm_tdx *kvm_tdx,
 		return -EIO;
 	}
 
-	mig_state->started = true;
 	return 0;
 }
 
@@ -824,7 +821,6 @@ static int tdx_mig_export_state_immutable(struct kvm_tdx *kvm_tdx,
 					  struct tdx_mig_stream *stream,
 					  struct kvm_cgm_data *data)
 {
-	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
 	/* Immutable state pages plus 1 MBMD page */
 	uint32_t total_pages = tdx_mig_caps.immutable_state_pages + 1;
 	struct tdx_mig_page_list *page_list = &stream->page_list;
@@ -861,7 +857,6 @@ static int tdx_mig_export_state_immutable(struct kvm_tdx *kvm_tdx,
 	mbmd_ext->driver_version = TDX_MIG_DRIVER_VERSION;
 	data->size = (out.rdx + TDX_MIG_MBMD_NPAGES) * PAGE_SIZE;
 
-	mig_state->started = true;
 	return 0;
 }
 
@@ -1629,9 +1624,6 @@ int tdx_mig_end(struct kvm *kvm, long abort)
 	struct tdx_mig_state *mig_state = kvm_tdx->mig_state;
 	uint64_t err;
 
-	if (!mig_state->started)
-		return 0;
-
 	if (abort) {
 		if (mig_state->is_src)
 			return tdx_mig_export_abort(kvm_tdx);
@@ -1648,7 +1640,6 @@ int tdx_mig_end(struct kvm *kvm, long abort)
 		kvm_tdx->finalized = true;
 	}
 
-	mig_state->started = false;
 	pr_info("TD (PID: %d) migration completes\n",
 		kvm_tdx->kvm.userspace_pid);
 

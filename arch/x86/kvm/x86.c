@@ -7373,6 +7373,7 @@ set_pit2_out:
 		r = static_call(kvm_x86_cgm_start)(kvm, &data);
 		if (r)
 			goto out;
+		kvm->arch.cgm_started = true;
 		r = -EFAULT;
 		if (copy_to_user(argp, &data, sizeof(data)))
 			goto out;
@@ -7484,6 +7485,10 @@ set_pit2_out:
 	case KVM_CGM_END: {
 		long abort;
 
+		r = 0;
+		if (!kvm->arch.cgm_started)
+			goto out;
+
 		r = -ENOTTY;
 		if (!kvm_x86_ops.cgm_end)
 			goto out;
@@ -7493,6 +7498,8 @@ set_pit2_out:
 			goto out;
 
 		r = static_call(kvm_x86_cgm_end)(kvm, abort);
+		if (!abort)
+			kvm->arch.cgm_started = false;
 		break;
 	}
 	default:
