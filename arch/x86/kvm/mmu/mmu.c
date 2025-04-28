@@ -7840,6 +7840,18 @@ void kvm_mmu_destroy_worker_thread(struct kvm *kvm)
 	write_unlock(&kvm->mmu_lock);
 }
 
+static void kvm_mmu_worker_cancel_request(struct kvm *kvm, unsigned long type)
+{
+	write_lock(&kvm->mmu_lock);
+	kvm->arch.mmu_worker_requests &= ~type;
+	write_unlock(&kvm->mmu_lock);
+}
+
+void kvm_mmu_worker_cancel_private_page_merging(struct kvm *kvm)
+{
+	kvm_mmu_worker_cancel_request(kvm, KVM_MMU_WORK_TYPE_MERGE);
+}
+
 static int kvm_mmu_worker_submit_request(struct kvm *kvm, unsigned long type)
 {
 	int err = 0;

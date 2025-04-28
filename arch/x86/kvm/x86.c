@@ -13213,6 +13213,13 @@ static void kvm_mmu_slot_apply_flags(struct kvm *kvm,
 		}
 	} else {
 		/*
+		 * Cancel any ongoing asynchronous large page merging. This is
+		 * necessary because a previous aborted migration session might
+		 * have triggered the merging process.
+		 */
+		kvm_mmu_worker_cancel_private_page_merging(kvm);
+
+		/*
 		 * Initially-all-set does not require write protecting any page,
 		 * because they're all assumed to be dirty.
 		 */

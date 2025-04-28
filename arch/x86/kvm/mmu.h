@@ -353,4 +353,6 @@ static inline bool kvm_is_private_gpa(const struct kvm *kvm, gpa_t gpa)
 	return mask && !(gpa_to_gfn(gpa) & mask);
 }
 
+void kvm_mmu_worker_cancel_private_page_merging(struct kvm *kvm);
+
 #endif
