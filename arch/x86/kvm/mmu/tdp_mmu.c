@@ -2448,8 +2448,7 @@ static int tdp_mmu_restore_private_page(struct kvm *kvm, gfn_t gfn,
 	return static_call(kvm_x86_restore_private_page)(kvm, gfn);
 }
 
-static int tdp_mmu_restore_private_pages(struct kvm *kvm,
-					 struct kvm_mmu_page *root)
+int tdp_mmu_restore_private_pages(struct kvm *kvm, struct kvm_mmu_page *root)
 {
 	struct tdp_iter iter;
 	gfn_t end = tdp_mmu_max_gfn_exclusive();
@@ -2458,6 +2457,9 @@ static int tdp_mmu_restore_private_pages(struct kvm *kvm,
 
 	rcu_read_lock();
 	for_each_tdp_pte_min_level(iter, kvm, root, PG_LEVEL_4K, start, end) {
+		if (kthread_should_stop())
+			break;
+
 		if (tdp_mmu_iter_cond_resched(kvm, &iter, false, false))
 			continue;
 
@@ -2477,24 +2479,22 @@ static int tdp_mmu_restore_private_pages(struct kvm *kvm,
 	return ret;
 }
 
-int kvm_tdp_mmu_restore_private_pages(struct kvm *kvm)
+int tdp_mmu_handle_private_pages(struct kvm *kvm,
+		int (*func)(struct kvm *kvm, struct kvm_mmu_page *root))
 {
 	struct kvm_mmu_page *root;
 	int i, ret;
-
-	write_lock(&kvm->mmu_lock);
 
 	for (i = 0; i < kvm_arch_nr_memslot_as_ids(kvm); i++) {
 		for_each_tdp_mmu_root_yield_safe(kvm, root, false) {
 			if (!is_private_sp(root))
 				continue;
-			ret = tdp_mmu_restore_private_pages(kvm, root);
+			ret = func(kvm, root);
 			if (ret)
 				break;
 		}
 	}
 	kvm_flush_remote_tlbs(kvm);
 
-	write_unlock(&kvm->mmu_lock);
 	return ret;
 }

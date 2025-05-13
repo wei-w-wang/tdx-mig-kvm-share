@@ -7593,6 +7593,8 @@ void kvm_mmu_pre_destroy_vm(struct kvm *kvm)
 {
 	if (kvm->arch.nx_huge_page_recovery_thread)
 		kthread_stop(kvm->arch.nx_huge_page_recovery_thread);
+
+	kvm_mmu_destroy_worker_thread(kvm);
 }
 
 #ifdef CONFIG_KVM_GENERIC_MEMORY_ATTRIBUTES
@@ -7767,11 +7769,74 @@ int kvm_mmu_import_private_pages(struct kvm *kvm, struct kvm_cgm_data *data,
 	return ret;
 }
 
+#define KVM_MMU_WORK_TYPE_RESTORE	(0x1UL << 0)
+
+static int kvm_mmu_worker_handle_restore(struct kvm *kvm)
+{
+	int ret;
+
+	if (!(kvm->arch.mmu_worker_requests & KVM_MMU_WORK_TYPE_RESTORE))
+		return 0;
+
+	ret = tdp_mmu_handle_private_pages(kvm, tdp_mmu_restore_private_pages);
+	if (ret) {
+		pr_err("%s: Failed to restore private pages: %d\n",
+			__func__, ret);
+		return ret;
+	}
+
+	kvm->arch.mmu_worker_requests &= ~KVM_MMU_WORK_TYPE_RESTORE;
+	return 0;
+}
+
+static int kvm_mmu_worker_thread(struct kvm *kvm, uintptr_t type)
+{
+	int ret;
+
+	write_lock(&kvm->mmu_lock);
+
+	while (kvm->arch.mmu_worker_requests) {
+		ret = kvm_mmu_worker_handle_restore(kvm);
+		if (ret)
+			break;
+	}
+
+	kvm->arch.mmu_worker_thread = NULL;
+	write_unlock(&kvm->mmu_lock);
+	return ret;
+}
+
+void kvm_mmu_destroy_worker_thread(struct kvm *kvm)
+{
+	write_lock(&kvm->mmu_lock);
+
+	if (kvm->arch.mmu_worker_thread)
+		kthread_stop(kvm->arch.mmu_worker_thread);
+
+	write_unlock(&kvm->mmu_lock);
+}
+
+static int kvm_mmu_worker_submit_request(struct kvm *kvm, unsigned long type)
+{
+	int err = 0;
+
+	write_lock(&kvm->mmu_lock);
+	kvm->arch.mmu_worker_requests |= type;
+	write_unlock(&kvm->mmu_lock);
+
+	err = kvm_vm_create_worker_thread(kvm, kvm_mmu_worker_thread, 0,
+			"kvm_mmu_worker", &kvm->arch.mmu_worker_thread);
+	if (!err)
+		kthread_unpark(kvm->arch.mmu_worker_thread);
+
+	return err;
+}
+
 int kvm_mmu_restore_private_pages(struct kvm *kvm)
 {
 	if (!tdp_mmu_enabled)
 		return -EOPNOTSUPP;
 
-	return kvm_tdp_mmu_restore_private_pages(kvm);
+	return kvm_mmu_worker_submit_request(kvm, KVM_MMU_WORK_TYPE_RESTORE);
 }
 EXPORT_SYMBOL_GPL(kvm_mmu_restore_private_pages);

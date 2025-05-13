@@ -1447,6 +1447,8 @@ struct kvm_arch {
 
 	struct kvm_x86_pmu_event_filter __rcu *pmu_event_filter;
 	struct task_struct *nx_huge_page_recovery_thread;
+	struct task_struct *mmu_worker_thread;
+	uint64_t mmu_worker_requests;
 
 #ifdef CONFIG_X86_64
 	/* The number of TDP MMU pages across all roots. */

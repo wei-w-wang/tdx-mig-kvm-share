@@ -74,8 +74,11 @@ int kvm_tdp_mmu_import_private_pages(struct kvm *kvm,
 				     struct kvm_cgm_data *data,
 				     struct kvm_import_private_pages *pages);
 
-int kvm_tdp_mmu_restore_private_pages(struct kvm *kvm);
+int tdp_mmu_handle_private_pages(struct kvm *kvm,
+		int (*func)(struct kvm *kvm, struct kvm_mmu_page *root));
+int tdp_mmu_restore_private_pages(struct kvm *kvm, struct kvm_mmu_page *root);
 
+void kvm_mmu_destroy_worker_thread(struct kvm *kvm);
 #ifdef CONFIG_X86_64
 static inline bool is_tdp_mmu_page(struct kvm_mmu_page *sp) { return sp->tdp_mmu_page; }
 #else
