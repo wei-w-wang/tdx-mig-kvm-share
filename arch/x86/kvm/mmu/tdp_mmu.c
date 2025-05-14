@@ -2173,6 +2173,9 @@ retry:
 		if (tdp_mmu_iter_cond_resched(kvm, &iter, false, true))
 			continue;
 
+		if (is_private)
+			continue;
+
 		if (iter.level > KVM_MAX_HUGEPAGE_LEVEL ||
 		    !is_shadow_present_pte(iter.old_spte))
 			continue;
@@ -2219,8 +2222,16 @@ void kvm_tdp_mmu_zap_collapsible_sptes(struct kvm *kvm,
 
 	lockdep_assert_held_read(&kvm->mmu_lock);
 
-	for_each_valid_tdp_mmu_root_yield_safe(kvm, root, slot->as_id, true)
+	for_each_valid_tdp_mmu_root_yield_safe(kvm, root, slot->as_id, true) {
+		/*
+		 * Only shared pages go through zap_collapsible_spte_range().
+		 * Private pages will be merged into large pages in an
+		 * asynchronous way.
+		 */
+		if (is_private_sp(root))
+			continue;
 		zap_collapsible_spte_range(kvm, root, slot);
+	}
 }
 
 /*
