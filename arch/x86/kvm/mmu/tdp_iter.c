@@ -110,7 +110,7 @@ void tdp_iter_step_down(struct tdp_iter *iter, tdp_ptep_t child_pt)
 {
 	WARN_ON_ONCE(!child_pt);
 	WARN_ON_ONCE(iter->yielded);
-	WARN_ON_ONCE(iter->level == iter->min_level);
+	WARN_ON_ONCE(iter->level == iter->min_level && iter->level == PG_LEVEL_4K);
 
 	step_down(iter, child_pt);
 }

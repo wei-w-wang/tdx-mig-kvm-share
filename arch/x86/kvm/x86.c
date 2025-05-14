@@ -13152,6 +13152,7 @@ static void kvm_mmu_slot_apply_flags(struct kvm *kvm,
 				     const struct kvm_memory_slot *new,
 				     enum kvm_mr_change change)
 {
+	int err;
 	u32 old_flags = old ? old->flags : 0;
 	u32 new_flags = new ? new->flags : 0;
 	bool log_dirty_pages = new_flags & KVM_MEM_LOG_DIRTY_PAGES;
@@ -13204,6 +13205,12 @@ static void kvm_mmu_slot_apply_flags(struct kvm *kvm,
 		 * page faults will create the large-page sptes.
 		 */
 		kvm_mmu_zap_collapsible_sptes(kvm, new);
+		if (kvm->arch.vm_type == KVM_X86_TDX_VM) {
+			err = kvm_mmu_merge_private_pages(kvm);
+			if (!err)
+				return;
+			pr_err("Resume large private pages error %d\n", err);
+		}
 	} else {
 		/*
 		 * Initially-all-set does not require write protecting any page,

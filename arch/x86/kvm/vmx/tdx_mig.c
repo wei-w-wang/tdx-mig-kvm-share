@@ -1638,6 +1638,8 @@ int tdx_mig_end(struct kvm *kvm, long abort)
 			return -EIO;
 		}
 		kvm_tdx->finalized = true;
+		if (kvm_mmu_merge_private_pages(kvm))
+			pr_err("Failed to start hugepage merging\n");
 	}
 
 	pr_info("TD (PID: %d) migration completes\n",

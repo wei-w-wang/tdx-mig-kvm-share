@@ -7770,6 +7770,7 @@ int kvm_mmu_import_private_pages(struct kvm *kvm, struct kvm_cgm_data *data,
 }
 
 #define KVM_MMU_WORK_TYPE_RESTORE	(0x1UL << 0)
+#define KVM_MMU_WORK_TYPE_MERGE		(0x1UL << 1)
 
 static int kvm_mmu_worker_handle_restore(struct kvm *kvm)
 {
@@ -7790,6 +7791,24 @@ static int kvm_mmu_worker_handle_restore(struct kvm *kvm)
 	return 0;
 }
 
+static int kvm_mmu_worker_handle_merge(struct kvm *kvm)
+{
+	int ret;
+
+	if (!(kvm->arch.mmu_worker_requests & KVM_MMU_WORK_TYPE_MERGE))
+		return 0;
+
+	ret = tdp_mmu_handle_private_pages(kvm, tdp_mmu_merge_private_pages);
+	if (ret) {
+		pr_err("%s: Failed to merge private pages: %d\n",
+			__func__, ret);
+		return ret;
+	}
+
+	kvm->arch.mmu_worker_requests &= ~KVM_MMU_WORK_TYPE_MERGE;
+	return 0;
+}
+
 static int kvm_mmu_worker_thread(struct kvm *kvm, uintptr_t type)
 {
 	int ret;
@@ -7798,6 +7817,10 @@ static int kvm_mmu_worker_thread(struct kvm *kvm, uintptr_t type)
 
 	while (kvm->arch.mmu_worker_requests) {
 		ret = kvm_mmu_worker_handle_restore(kvm);
+		if (ret)
+			break;
+
+		ret = kvm_mmu_worker_handle_merge(kvm);
 		if (ret)
 			break;
 	}
@@ -7825,6 +7848,10 @@ static int kvm_mmu_worker_submit_request(struct kvm *kvm, unsigned long type)
 	kvm->arch.mmu_worker_requests |= type;
 	write_unlock(&kvm->mmu_lock);
 
+	/* Thread is already running */
+	if (kvm->arch.mmu_worker_thread)
+		return 0;
+
 	err = kvm_vm_create_worker_thread(kvm, kvm_mmu_worker_thread, 0,
 			"kvm_mmu_worker", &kvm->arch.mmu_worker_thread);
 	if (!err)
@@ -7841,3 +7868,12 @@ int kvm_mmu_restore_private_pages(struct kvm *kvm)
 	return kvm_mmu_worker_submit_request(kvm, KVM_MMU_WORK_TYPE_RESTORE);
 }
 EXPORT_SYMBOL_GPL(kvm_mmu_restore_private_pages);
+
+int kvm_mmu_merge_private_pages(struct kvm *kvm)
+{
+	if (!tdp_mmu_enabled)
+		return -EOPNOTSUPP;
+
+	return kvm_mmu_worker_submit_request(kvm, KVM_MMU_WORK_TYPE_MERGE);
+}
+EXPORT_SYMBOL_GPL(kvm_mmu_merge_private_pages);

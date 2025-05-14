@@ -77,6 +77,7 @@ int kvm_tdp_mmu_import_private_pages(struct kvm *kvm,
 int tdp_mmu_handle_private_pages(struct kvm *kvm,
 		int (*func)(struct kvm *kvm, struct kvm_mmu_page *root));
 int tdp_mmu_restore_private_pages(struct kvm *kvm, struct kvm_mmu_page *root);
+int tdp_mmu_merge_private_pages(struct kvm *kvm, struct kvm_mmu_page *root);
 
 void kvm_mmu_destroy_worker_thread(struct kvm *kvm);
 #ifdef CONFIG_X86_64

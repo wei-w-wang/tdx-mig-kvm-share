@@ -2440,6 +2440,127 @@ int kvm_tdp_mmu_import_private_pages(struct kvm *kvm,
 	return ret;
 }
 
+static int tdp_mmu_merge_private_spt_async(struct kvm_vcpu *vcpu,
+					   struct tdp_iter *iter)
+{
+	u64 *sptep = rcu_dereference(iter->sptep);
+	u64 new_spte = iter->old_spte;
+	struct kvm_mmu_page *child_sp;
+	struct kvm *kvm = vcpu->kvm;
+	struct tdp_iter child_iter;
+	gfn_t gfn = iter->gfn;
+	tdp_ptep_t child_pt;
+	kvm_pfn_t new_pfn;
+	int ret = 0;
+	int i;
+
+	/*
+	 * TDX KVM supports only 2MB large page.  It's not supported to merge
+	 * 2MB pages into 1GB page at the moment.
+	 */
+	WARN_ON_ONCE(iter->level != PG_LEVEL_2M);
+
+	/* Freeze the spte to prevent other threads from working spte. */
+	if (!try_cmpxchg64(sptep, &iter->old_spte, REMOVED_SPTE))
+		return 0;
+
+	/*
+	 * Step down to the child spte.  Because tdp_iter_next() assumes the
+	 * parent spte isn't frozen, do it manually.
+	 */
+	child_pt = spte_to_child_pt(iter->old_spte, PG_LEVEL_2M);
+	child_sp = sptep_to_sp(child_pt);
+	WARN_ON_ONCE(child_sp->role.level != PG_LEVEL_4K);
+	WARN_ON_ONCE(!kvm_mmu_page_role_is_private(child_sp->role));
+
+	/* Don't modify iter as the caller will use iter after this function. */
+	child_iter = *iter;
+	/* Adjust the target gfn to the head gfn of the large page. */
+	child_iter.next_last_level_gfn &= -KVM_PAGES_PER_HPAGE(PG_LEVEL_2M);
+	tdp_iter_step_down(&child_iter, child_pt);
+
+	/*
+	 * All child pages are required to be populated for merging them into a
+	 * large page.  Populate all child spte.
+	 */
+	for (i = 0; i < SPTE_ENT_PER_PAGE; i = tdp_mmu_iter_step_side(i, &child_iter)) {
+		WARN_ON_ONCE(child_iter.level != PG_LEVEL_4K);
+
+		if (!i)
+			new_pfn = spte_to_pfn(child_iter.old_spte);
+
+		if (!is_shadow_present_pte(child_iter.old_spte) ||
+		    spte_to_pfn(child_iter.old_spte) != (new_pfn + i))
+			goto out;
+	}
+
+	/* Prevent the Secure-EPT entry from being used. */
+	ret = static_call(kvm_x86_zap_private_spte)(kvm, gfn, PG_LEVEL_2M);
+	if (ret)
+		goto out;
+	kvm_flush_remote_tlbs_range(kvm, gfn & KVM_HPAGE_GFN_MASK(PG_LEVEL_2M),
+				    KVM_PAGES_PER_HPAGE(PG_LEVEL_2M));
+
+	/* Merge pages into a large page. */
+	ret = static_call(kvm_x86_merge_private_spt)(kvm, gfn, PG_LEVEL_2M,
+						     kvm_mmu_private_spt(child_sp));
+	if (ret) {
+		static_call(kvm_x86_unzap_private_spte)(kvm, gfn, PG_LEVEL_2M);
+		goto out;
+	}
+
+	/* Update stats manually as we don't use tdp_mmu_set_spte{, _atomic}(). */
+	kvm_update_page_stats(kvm, PG_LEVEL_4K, -SPTE_ENT_PER_PAGE);
+	kvm_update_page_stats(kvm, PG_LEVEL_2M, 1);
+
+	new_spte &= ~SPTE_BASE_ADDR_MASK;
+	new_spte |= (((u64)new_pfn << PAGE_SHIFT) | PT_PAGE_SIZE_MASK);
+
+	/*
+	 * Free unused child sp.  Secure-EPT page was already freed at TDX level
+	 * by kvm_x86_merge_private_spt().
+	 */
+	tdp_unaccount_mmu_page(kvm, child_sp);
+	tdp_mmu_free_sp(child_sp);
+out:
+	__kvm_tdp_mmu_write_spte(sptep, new_spte);
+	return ret;
+}
+
+int tdp_mmu_merge_private_pages(struct kvm *kvm, struct kvm_mmu_page *root)
+{
+	struct kvm_vcpu *vcpu = kvm_get_vcpu(kvm, 0);
+	gfn_t end = tdp_mmu_max_gfn_exclusive();
+	struct tdp_iter iter;
+	gfn_t start = 0;
+	int ret = 0;
+
+	rcu_read_lock();
+	for_each_tdp_pte_min_level(iter, kvm, root, PG_LEVEL_2M, start, end) {
+		if (kthread_should_stop())
+			break;
+
+		if (tdp_mmu_iter_cond_resched(kvm, &iter, true, false))
+			continue;
+
+		if (iter.level > PG_LEVEL_2M)
+			continue;
+
+		if (!is_shadow_present_pte(iter.old_spte))
+			continue;
+
+		if (is_last_spte(iter.old_spte, PG_LEVEL_2M))
+			continue;
+
+		ret = tdp_mmu_merge_private_spt_async(vcpu, &iter);
+		if (ret && ret != -EAGAIN)
+			break;
+	}
+	rcu_read_unlock();
+
+	return ret;
+}
+
 static int tdp_mmu_restore_private_page(struct kvm *kvm, gfn_t gfn,
 					u64 *sptep, u64 old_spte, int level)
 {

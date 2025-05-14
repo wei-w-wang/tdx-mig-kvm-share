@@ -390,6 +390,8 @@ int kvm_mmu_import_private_pages(struct kvm *kvm, struct kvm_cgm_data *data,
 
 int kvm_mmu_restore_private_pages(struct kvm *kvm);
 
+int kvm_mmu_merge_private_pages(struct kvm *kvm);
+
 /*
  * kvm_mmu_extended_role complements kvm_mmu_page_role, tracking properties
  * relevant to the current MMU configuration.   When loading CR0, CR4, or EFER,
