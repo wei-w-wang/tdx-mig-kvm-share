@@ -204,34 +204,27 @@ bool make_spte(struct kvm_vcpu *vcpu, struct kvm_mmu_page *sp,
 	spte |= (u64)pfn << PAGE_SHIFT;
 
 	if (pte_access & ACC_WRITE_MASK) {
-		spte |= PT_WRITABLE_MASK | shadow_mmu_writable_mask;
-
-		/*
-		 * Optimization: for pte sync, if spte was writable the hash
-		 * lookup is unnecessary (and expensive). Write protection
-		 * is responsibility of kvm_mmu_get_page / kvm_mmu_sync_roots.
-		 * Same reasoning can be applied to dirty page accounting.
-		 */
-		if (is_writable_pte(old_spte))
-			goto out;
-
 		/*
 		 * Unsync shadow pages that are reachable by the new, writable
 		 * SPTE.  Write-protect the SPTE if the page can't be unsync'd,
 		 * e.g. it's write-tracked (upper-level SPs) or has one or more
 		 * shadow pages and unsync'ing pages is not allowed.
+		 *
+		 * When overwriting an existing leaf SPTE, and the old SPTE was
+		 * writable, skip trying to unsync shadow pages as any relevant
+		 * shadow pages must already be unsync, i.e. the hash lookup is
+		 * unnecessary (and expensive).  Note, this relies on KVM not
+		 * changing PFNs without first zapping the old SPTE, which is
+		 * guaranteed by both the shadow MMU and the TDP MMU.
 		 */
-		if (mmu_try_to_unsync_pages(vcpu->kvm, slot, gfn, can_unsync, prefetch)) {
+		if ((!is_last_spte(old_spte, level) || !is_writable_pte(old_spte)) &&
+		    mmu_try_to_unsync_pages(vcpu->kvm, slot, gfn, can_unsync, prefetch))
 			wrprot = true;
-			pte_access &= ~ACC_WRITE_MASK;
-			spte &= ~(PT_WRITABLE_MASK | shadow_mmu_writable_mask);
-		}
+		else
+			spte |= PT_WRITABLE_MASK | shadow_mmu_writable_mask |
+				shadow_dirty_mask;
 	}
 
-	if (pte_access & ACC_WRITE_MASK)
-		spte |= spte_shadow_dirty_mask(spte);
-
-out:
 	if (prefetch)
 		spte = mark_spte_for_access_track(spte);
 
