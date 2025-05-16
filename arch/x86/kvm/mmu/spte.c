@@ -323,6 +323,24 @@ u64 make_nonleaf_spte(u64 *child_pt, bool ad_disabled)
 	return spte;
 }
 
+u64 make_spte_large_page(struct kvm_vcpu *vcpu, gfn_t gfn,
+			 u64 old_spte, u64 new_pfn)
+{
+	struct kvm_memory_slot *slot = gfn_to_memslot(vcpu->kvm, gfn);
+	u64 new_spte = (old_spte & ~SPTE_BASE_ADDR_MASK) |
+			(new_pfn << PAGE_SHIFT) | PT_PAGE_SIZE_MASK |
+			shadow_dirty_mask | shadow_mmu_writable_mask;
+
+	if (!(slot->flags & KVM_MEM_READONLY))
+		new_spte |= shadow_host_writable_mask;
+
+	if (shadow_memtype_mask)
+		new_spte |= static_call(kvm_x86_get_mt_mask)(vcpu, gfn,
+						kvm_is_mmio_pfn(new_pfn));
+
+	return new_spte;
+}
+
 u64 kvm_mmu_changed_pte_notifier_make_spte(u64 old_spte, kvm_pfn_t new_pfn)
 {
 	u64 new_spte;

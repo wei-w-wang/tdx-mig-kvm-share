@@ -2513,9 +2513,7 @@ static int tdp_mmu_merge_private_spt_async(struct kvm_vcpu *vcpu,
 	kvm_update_page_stats(kvm, PG_LEVEL_4K, -SPTE_ENT_PER_PAGE);
 	kvm_update_page_stats(kvm, PG_LEVEL_2M, 1);
 
-	new_spte &= ~SPTE_BASE_ADDR_MASK;
-	new_spte |= (((u64)new_pfn << PAGE_SHIFT) | PT_PAGE_SIZE_MASK);
-
+	new_spte = make_spte_large_page(vcpu, gfn, new_spte, (u64)new_pfn);
 	/*
 	 * Free unused child sp.  Secure-EPT page was already freed at TDX level
 	 * by kvm_x86_merge_private_spt().
