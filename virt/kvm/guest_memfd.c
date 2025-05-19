@@ -637,6 +637,7 @@ static int __kvm_gmem_create(struct kvm *kvm, loff_t size, u64 flags)
 		err = kvm_gmem_hugetlb_setup(inode, file, gmem, size, flags);
 		if (err)
 			goto err_gmem;
+		kvm->gmem_huge_page_used = true;
 	}
 
 	gmem->flags = flags;

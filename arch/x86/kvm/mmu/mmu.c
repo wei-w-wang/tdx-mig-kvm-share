@@ -7883,6 +7883,9 @@ EXPORT_SYMBOL_GPL(kvm_mmu_restore_private_pages);
 
 int kvm_mmu_merge_private_pages(struct kvm *kvm)
 {
+	if (!kvm->gmem_huge_page_used || max_huge_page_level == PG_LEVEL_4K)
+		return 0;
+
 	if (!tdp_mmu_enabled)
 		return -EOPNOTSUPP;
 
