@@ -7769,9 +7769,6 @@ int kvm_mmu_import_private_pages(struct kvm *kvm, struct kvm_cgm_data *data,
 	return ret;
 }
 
-#define KVM_MMU_WORK_TYPE_RESTORE	(0x1UL << 0)
-#define KVM_MMU_WORK_TYPE_MERGE		(0x1UL << 1)
-
 static int kvm_mmu_worker_handle_restore(struct kvm *kvm)
 {
 	int ret;

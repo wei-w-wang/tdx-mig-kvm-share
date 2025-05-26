@@ -8,6 +8,9 @@
 
 #include "mmu.h"
 
+#define KVM_MMU_WORK_TYPE_RESTORE	(0x1UL << 0)
+#define KVM_MMU_WORK_TYPE_MERGE		(0x1UL << 1)
+
 #ifdef CONFIG_KVM_PROVE_MMU
 #define KVM_MMU_WARN_ON(x) WARN_ON_ONCE(x)
 #else

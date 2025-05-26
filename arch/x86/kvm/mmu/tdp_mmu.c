@@ -2541,6 +2541,9 @@ int tdp_mmu_merge_private_pages(struct kvm *kvm, struct kvm_mmu_page *root)
 		if (tdp_mmu_iter_cond_resched(kvm, &iter, true, false))
 			continue;
 
+		if (!(kvm->arch.mmu_worker_requests & KVM_MMU_WORK_TYPE_MERGE))
+			break;
+
 		if (iter.level > PG_LEVEL_2M)
 			continue;
 
