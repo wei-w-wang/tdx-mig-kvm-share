@@ -76,7 +76,10 @@ struct tdx_mig_mbmd_ext {
 	union {
 		#define TDX_MIG_DRIVER_VERSION	1
 		uint16_t driver_version;
-		uint16_t nr_pages;
+		struct {
+			uint16_t nr_pages;
+			uint32_t pir[8];
+		};
 	};
 };
 
@@ -1379,6 +1382,7 @@ static int tdx_mig_export_state_vcpu(struct vcpu_tdx *tdx,
 
 	mbmd_ext = tdx_mig_get_mbmd_ext(stream);
 	mbmd_ext->nr_pages = nr_pages_exported;
+	memcpy(mbmd_ext->pir, tdx->pi_desc.pir, 32);
 	data->size += nr_pages_exported * PAGE_SIZE;
 
 out:
@@ -1548,6 +1552,8 @@ static int tdx_mig_import_state_vcpu(struct vcpu_tdx *tdx,
 	mbmd_ext = tdx_mig_get_mbmd_ext(stream);
 	state_pages = mbmd_ext->nr_pages - TDX_MIG_MBMD_NPAGES;
 	stream->page_list.info.last_entry = state_pages - 1;
+
+	memcpy(tdx->pi_desc.pir, mbmd_ext->pir, 32);
 
 	tdx_flush_vp_on_cpu(vcpu);
 	cpu = get_cpu();
